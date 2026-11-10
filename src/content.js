@@ -120,7 +120,12 @@
     const m = text.match(/^(.*?)\s*\[(\d+)\]\s*$/);
     if (m) { text = m[1]; nth = Math.max(1, Number(m[2])); }
     const out = [];
-    for (const a of findTextAnchors(text)) {
+    // Alleen zichtbare labels; een label dat precies de tekst is gaat voor ("Opdrachtgever" vóór "Master opdrachtgever").
+    const wanted = core(text);
+    const anchors = findTextAnchors(text).filter(isVisible);
+    const exact = (a) => core(a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement ? a.value : directText(a)).replace(/^\d+\s+/, '') === wanted;
+    anchors.sort((a, b) => exact(b) - exact(a));
+    for (const a of anchors) {
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
       walker.currentNode = a;
       let n;
@@ -138,6 +143,13 @@
   // Wanneer werd in dit frame voor het laatst een veld actief? (om tussen frames het juiste te kiezen)
   let lastFocusAt = 0;
   document.addEventListener('focusin', () => { lastFocusAt = Date.now(); }, true);
+
+  /** Element met de cursor, ook als het een alleen-lezen veld of knop is. */
+  function findFocusedAny() {
+    const el = document.activeElement;
+    if (!el || el === document.body || el === document.documentElement || /^(IFRAME|FRAME)$/.test(el.tagName)) return [];
+    return [el];
+  }
 
   /** Het veld waar de cursor nu staat (in dit frame). */
   function findFocused() {
@@ -160,6 +172,7 @@
     if (m) { sel = m[1].trim(); index = Number(m[2]); }
     let list;
     if (/^(focus|actief veld|cursor)$/i.test(sel)) list = findFocused();
+    else if (sel === 'focus-any') list = findFocusedAny();
     else if (sel.startsWith('text=')) list = findByText(sel.slice(5));
     else if (sel.startsWith('label=')) list = findByLabel(sel.slice(6));
     else if (sel.startsWith('field=')) list = findByField(sel.slice(6));
@@ -404,6 +417,14 @@
   }
 
   async function exec(step) {
+    if (step.type === 'read' && step.pattern) {
+      let re = null;
+      try { re = new RegExp(step.pattern); } catch { /* achtergrond meldt dit */ }
+      const { list } = findAll(step.selector);
+      const ordered = [...list.filter(isVisible), ...list.filter((e) => !isVisible(e))];
+      const hit = re && ordered.find((e) => re.test(readValue(e)));
+      if (hit) return readValue(hit);
+    }
     const el = find(step.selector, step.type === 'read', step.near);
     if (!el) throw new Error(`element niet gevonden: ${step.selector}`);
     if (step.type !== 'read') flash(el);
@@ -727,6 +748,29 @@
       case 'progress':
         if (isTop) ui.progress(msg.text);
         return false;
+      case 'isFocused': {
+        // Staat de cursor in (een van) de velden die bij deze selector horen?
+        try {
+          const { list } = findAll(msg.selector);
+          sendResponse({ focused: list.includes(document.activeElement) });
+        } catch {
+          sendResponse({ focused: false });
+        }
+        return false;
+      }
+      case 'describeFocus': {
+        const a = document.activeElement;
+        if (!a || a === document.body) { sendResponse({ text: '(niets)' }); return false; }
+        let label = '';
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        let n;
+        while ((n = walker.nextNode())) {
+          if (a.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING) break;
+          if (norm(n.data)) label = norm(n.data);
+        }
+        sendResponse({ text: `${a.tagName.toLowerCase()}${a.name ? ' ' + a.name : ''} bij "${label.slice(0, 40)}"${'value' in a && a.value ? ' (waarde ' + String(a.value).slice(0, 20) + ')' : ''}` });
+        return false;
+      }
       case 'clickTagged': {
         // Reserve: klikken vanuit het content script als de pagina-context niet bereikbaar is.
         const el = document.querySelector(`[data-ba-click="${msg.tag}"]`);

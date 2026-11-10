@@ -229,8 +229,16 @@ async function test(name, fn) {
     assert.strictEqual(await val('ontvanger'), '', 'onbekende afnemer hoort leeg te zijn');
     // Ontbrekende ontvanger-code wordt na invullen onthouden voor dit klantnummer
     await card.locator('input[data-name="ontvanger"]').fill('testontv');
-    for (const [n, v] of [['laaddatum', '2026-10-05'], ['laadtijd_van', '08:00'], ['losdatum', '2026-10-07'], ['lostijd_van', '14:00']]) {
-      await card.locator(`input[data-name="${n}"]`).fill(v);
+    // Snelle invoer: "11" → 11-<deze maand>-<dit jaar>, "8" → 08:00, "17" → 17:00, "830" → 08:30
+    const nu = new Date();
+    const mmjjjj = `${String(nu.getMonth() + 1).padStart(2, '0')}-${nu.getFullYear()}`;
+    const quick = [['laaddatum', '11', `11-${mmjjjj}`], ['laadtijd_van', '8', '08:00'], ['laadtijd_tot', '17', '17:00'],
+      ['losdatum', '3-12', `03-12-${nu.getFullYear()}`], ['lostijd_van', '830', '08:30']];
+    for (const [n, v, expect] of quick) {
+      const inp = card.locator(`input[data-name="${n}"]`);
+      await inp.fill(v);
+      await inp.press('Tab');
+      assert.strictEqual(await inp.inputValue(), expect, `snelle invoer ${n}: "${v}"`);
     }
     await card.locator('.actions button', { hasText: 'Uitvoeren' }).click();
     await panel.waitForTimeout(500);
@@ -270,6 +278,8 @@ async function test(name, fn) {
       ['u', 'd', 'TOPBROUD', '26SO270-011129', '', 'TOPBROUD', 'NEELEMAA3', '11-09-26', '08:00', '08:00', 'DDP', 'Biblis', '60123456', 'ACTIOBIB', 'ACTIOBIB', '14-09-26', '14:00', '14:00', '2031479', '33', 'EP']
     );
     assert.match(extra.status, /dossier aangemaakt\]\[opgeslagen\]\[pallets opgeslagen/);
+    assert.doesNotMatch(extra.status, /zonder tab/, 'Opdrachtgever niet via Tab bereikt');
+    assert.strictEqual(await up.textContent('#rolstatus'), '', 'cursor is bij de rol-keuze gekomen');
     assert.strictEqual(extra.instr, 'instructie: Laden in de lengte');
     await up.close();
   });

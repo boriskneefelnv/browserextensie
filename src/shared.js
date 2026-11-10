@@ -18,6 +18,7 @@ var BA = (() => {
     check: { label: 'Vinkje', selector: true, value: true, help: 'Zet een vinkje aan of uit (waarde: aan / uit).' },
     key: { label: 'Toets', selector: true, value: true, help: 'Druk op een toets in een veld, bijv. Enter, Tab of Escape.' },
     read: { label: 'Lees waarde', selector: true, value: false, variable: true, help: 'Lees de waarde/tekst van een element en bewaar die in een variabele.' },
+    tabTo: { label: 'Tab naar veld', selector: true, value: true, help: 'Druk Tab (zoals jij dat doet) tot de cursor in dit veld staat. Waarde = maximaal aantal keer Tab (standaard 10).' },
     waitFor: { label: 'Wacht op element', selector: true, value: false, help: 'Wacht tot een element zichtbaar is.' },
     waitGone: { label: 'Wacht tot weg', selector: true, value: false, help: 'Wacht tot een element (bijv. een laadscherm) verdwenen is.' },
     wait: { label: 'Wacht (ms)', selector: false, value: true, help: 'Wacht een vast aantal milliseconden.' },

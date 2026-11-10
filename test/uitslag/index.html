@@ -1,7 +1,12 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><title>Demo BluJay uitslag</title>
-<style>body{margin:0;display:flex;height:100vh;font:12px Verdana,sans-serif} iframe{border:0} #side{width:200px;border-right:4px solid #aaa} #main{flex:1}</style>
+<style>body{margin:0;font:12px Verdana,sans-serif} .top{height:30px;display:flex;justify-content:flex-end;align-items:center;padding:0 10px;border-bottom:1px solid #ccc} .wrap{display:flex;height:calc(100vh - 31px)} iframe{border:0} #side{width:200px;border-right:4px solid #aaa} #main{flex:1}</style>
 </head><body>
+<div class="top">Boris, Neele-Vat &nbsp; <select id="rol" title="rol"><option>Planner</option><option>Beheer</option></select></div>
+<div class="wrap">
 <iframe id="side" name="side" src="sidebar.html"></iframe>
 <iframe id="main" name="main" src="home.html"></iframe>
+</div>
+<p id="rolstatus"></p>
+<script>document.getElementById('rol').addEventListener('focus', () => { document.getElementById('rolstatus').textContent = 'ROL GEFOCUST'; });</script>
 </body></html>

@@ -77,7 +77,7 @@ chrome.tabs.onCreated.addListener((tab) => {
 
 /** Eén keer alle tabbladen/frames afzoeken naar één selector. */
 async function scanOnce(ctrl, selector, { frameHint, frameText, near, allowHidden }) {
-  const isFocus = /^(focus|actief veld|cursor)$/i.test(String(selector).trim());
+  const isFocus = /^(focus|focus-any|actief veld|cursor)$/i.test(String(selector).trim());
   let foundIn = null;
   let bestFocus = -1;
   // Nieuwste tabblad (bijv. een net geopend venster) eerst.
@@ -263,6 +263,40 @@ async function checkWhen(ctrl, when, vars) {
   return m[1] ? !found : !!found;
 }
 
+/** Druk Tab tot de cursor in het gevraagde veld staat (volgt de tab-volgorde van BluJay). */
+async function tabTo(ctrl, step, selector, fill, timeout, label) {
+  const max = Number(fill(step.value)) || 10;
+  const target = await locate(ctrl, selector, { frameHint: step.frame, near: fill(step.near || ''), timeout, label });
+  if (!target) throw new Error(`veld niet gevonden: ${selector}`);
+  let clicked = false;
+  for (let i = 0; ; i++) {
+    if (ctrl.stopped) throw new Error('gestopt door gebruiker');
+    const f = await scanOnce(ctrl, 'focus-any', {});
+    const sameFrame = f && f.tabId === target.tabId && f.frameId === target.frameId;
+    if (sameFrame) {
+      const r = await sendToFrame(f.tabId, f.frameId, { type: 'isFocused', selector });
+      if (r && r.focused) return;
+    }
+    if (!sameFrame || i >= max) {
+      // Cursor staat buiten het formulier (bijv. bij de rol-keuze) of het veld komt niet langs:
+      // nooit verder tabben, maar het veld aanklikken.
+      if (clicked) {
+        const d = f ? await sendToFrame(f.tabId, f.frameId, { type: 'describeFocus' }) : null;
+        throw new Error(`cursor komt niet in "${selector}" (staat bij: ${d?.text || 'onbekend'})`);
+      }
+      clicked = true;
+      const res = await sendToFrame(target.tabId, target.frameId, { type: 'exec', step: { type: 'click', selector } });
+      if (res?.value?.__clickTag) await clickTagged(target.tabId, target.frameId, res.value.__clickTag);
+      await sleep(300);
+      i = -1; // na het aanklikken opnieuw tellen
+      continue;
+    }
+    if (ctrl.realKeys && (await cdpAttach(ctrl, f.tabId))) await cdpKey(f.tabId, 'Tab');
+    else await sendToFrame(f.tabId, f.frameId, { type: 'exec', step: { type: 'key', selector: 'focus-any', value: 'Tab' } });
+    await sleep(350);
+  }
+}
+
 async function runStep(ctrl, step, vars, settings, label) {
   const fill = (s) => BA.fillTemplate(s, vars);
   const timeout = Number(step.timeout) || settings.timeout;
@@ -296,6 +330,8 @@ async function runStep(ctrl, step, vars, settings, label) {
     if (!gone) throw new Error(`element verdwijnt niet: ${selector}`);
     return;
   }
+
+  if (step.type === 'tabTo') return tabTo(ctrl, step, selector, fill, timeout, label);
 
   const deadline = Date.now() + timeout;
   for (;;) {

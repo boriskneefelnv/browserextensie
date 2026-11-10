@@ -34,20 +34,77 @@ function monthText(v) {
   return m ? `${MONTHS[Number(m[2]) - 1]} ${m[1]}` : v;
 }
 
+// ---- snelle invoer: datum "11" → 11-<deze maand>-<dit jaar>, tijd "8" → 08:00
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+/** Geeft dd-mm-jjjj terug, '' bij leeg, of null als het geen geldige datum is. */
+function normalizeDate(raw) {
+  const v = String(raw || '').trim();
+  if (!v) return '';
+  const now = new Date();
+  let d, m = now.getMonth() + 1, y = now.getFullYear(), r;
+  if ((r = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) [, y, m, d] = r.map(Number);
+  else if ((r = v.match(/^(\d{1,2})$/))) d = Number(r[1]);
+  else if ((r = v.match(/^(\d{1,2})[-./ ](\d{1,2})$/))) [d, m] = [Number(r[1]), Number(r[2])];
+  else if ((r = v.match(/^(\d{1,2})[-./ ](\d{1,2})[-./ ](\d{2}|\d{4})$/))) [d, m, y] = [Number(r[1]), Number(r[2]), Number(r[3])];
+  else if ((r = v.match(/^(\d{2})(\d{2})$/))) [d, m] = [Number(r[1]), Number(r[2])];
+  else if ((r = v.match(/^(\d{2})(\d{2})(\d{2}|\d{4})$/))) [d, m, y] = [Number(r[1]), Number(r[2]), Number(r[3])];
+  else return null;
+  if (y < 100) y += 2000;
+  const dt = new Date(y, m - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;
+  return `${pad2(d)}-${pad2(m)}-${y}`;
+}
+
+/** Geeft uu:mm terug, '' bij leeg, of null als het geen geldige tijd is. */
+function normalizeTime(raw) {
+  const v = String(raw || '').trim();
+  if (!v) return '';
+  let h, min = 0, r;
+  if ((r = v.match(/^(\d{1,2})$/))) h = Number(r[1]);
+  else if ((r = v.match(/^(\d{1,2})[:.,;h ](\d{1,2})$/))) [h, min] = [Number(r[1]), Number(r[2])];
+  else if ((r = v.match(/^(\d{1,2})(\d{2})$/))) [h, min] = [Number(r[1]), Number(r[2])];
+  else return null;
+  if (h > 23 || min > 59) return null;
+  return `${pad2(h)}:${pad2(min)}`;
+}
+
+function normalizeInput(input) {
+  const t = input.dataset.type;
+  if (t !== 'date' && t !== 'time') return true;
+  const n = (t === 'date' ? normalizeDate : normalizeTime)(input.value);
+  if (n === null) {
+    input.classList.add('missing');
+    input.title = t === 'date' ? 'Geen geldige datum (bijv. 11, 11-12 of 11-12-2026)' : 'Geen geldige tijd (bijv. 8, 17 of 8:30)';
+    return false;
+  }
+  input.value = n;
+  input.title = input.dataset.label;
+  return true;
+}
+
 function makeInput(m, inp) {
   const type = BA.INPUT_TYPES[inp.type] ? inp.type : 'text';
+  const smart = type === 'date' || type === 'time';
   const input = el('input', {
-    type,
+    type: smart ? 'text' : type,
+    class: smart ? 'smart-' + type : null,
     id: `in-${m.id}-${inp.name}`,
     'data-name': inp.name,
     'data-type': type,
     'data-label': inp.label || inp.name,
     'data-required': inp.required ? '1' : null,
     title: inp.label || inp.name,
-    placeholder: type === 'text' ? inp.placeholder || '' : null,
+    placeholder: type === 'date' ? 'dd-mm-jjjj' : type === 'time' ? (inp.placeholder || 'uu:mm') : type === 'text' ? inp.placeholder || '' : null,
+    inputmode: smart ? 'numeric' : null,
     autocomplete: 'off',
   });
   input.value = BA.fillTemplate(inp.default || '', BA.builtinVars());
+  if (smart) {
+    input.addEventListener('blur', () => normalizeInput(input));
+    input.addEventListener('change', () => normalizeInput(input));
+  }
   return input;
 }
 
@@ -82,6 +139,10 @@ function collectVars(box) {
   const vars = {};
   const months = [];
   for (const input of box.querySelectorAll('input[data-name]')) {
+    if (!normalizeInput(input)) {
+      input.focus();
+      throw new Error(`"${input.dataset.label}" is geen geldige ${input.dataset.type === 'date' ? 'datum' : 'tijd'}.`);
+    }
     const v = input.value.trim();
     if (input.dataset.required && !v) {
       input.classList.add('missing');
@@ -208,6 +269,7 @@ function renderDetail(m) {
   box.querySelectorAll('input[data-name]').forEach((i) => {
     i.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
     i.addEventListener('input', () => { updateSummary(); i.classList.remove('missing'); });
+    i.addEventListener('keydown', (e) => { if (e.key === 'Enter') normalizeInput(i); }, true);
   });
   updateSummary();
   return { box, runBtns: [runTop, runBtn] };

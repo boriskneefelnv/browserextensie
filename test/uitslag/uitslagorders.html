@@ -12,7 +12,7 @@
  #instr{display:none;position:absolute;top:120px;left:300px;background:#ffe;border:2px solid #777;padding:10px}
 </style></head>
 <body>
-<div class="tab" id="tabkop">Nieuw dossier</div>
+<div class="tab" id="tabkop">Aanmaken nieuw dossier</div>
 <div class="bar" id="bar" style="display:none;padding:4px">
   <a id="menuBtn">Menu &#9662;</a><a>Artikelregels</a><a>Goederenregels</a><a>Dossiermutaties</a>
 </div>
@@ -24,14 +24,20 @@
 </div>
 <div id="instr">Instructies uitslag<br><textarea id="instrText" rows="3" cols="30"></textarea><div id="instrSaved"></div></div>
 
-<table id="kop">
- <tr><td>Zending</td><td><input id="afd" value="" autofocus></td><td><input id="afd2" class="s"></td></tr>
+<table id="nieuw">
+ <tr><td>Ingevoerd</td><td><input value="10-11-26" readonly tabindex="-1"></td></tr>
+ <tr><td>Afdeling</td><td><input id="afd" value=""></td></tr>
+ <tr><td>Afh.code</td><td><input id="afh" class="s" value=""></td></tr>
+ <tr><td>Werknemer</td><td><input id="wn" class="s" value="BKN"></td></tr>
+ <tr><td>Periode</td><td>26/11</td></tr>
+ <tr><td>Soort</td><td><input id="soort" class="s" value="d"></td></tr>
+ <tr><td>Master afdeling</td><td><input id="mafd" class="s" disabled></td></tr>
+ <tr><td>Master dossiernummer</td><td><input id="mdos" value="0" readonly></td></tr>
+ <tr><td>Opdrachtgever</td><td><input id="opdr"></td></tr>
+ <tr><td>Sjabloon</td><td><input id="sjab"></td></tr>
+ <tr><td>Mutatie</td><td><input id="mut" class="s"></td></tr>
 </table>
-<table id="nieuw" style="display:none">
- <tr><td>Afh.code</td><td><input id="afh" class="s" value="i"></td><td>Soort</td><td><input id="soort" class="s" value="d"></td></tr>
- <tr><td>Opdrachtgever</td><td><input id="opdr"></td><td><input id="opdr2" class="s"></td></tr>
-</table>
-<table id="dossier">
+<table id="dossier" style="display:none">
  <tr><td>Referentie</td><td><input id="ref" disabled></td><td>Extra ref.</td><td><input id="extra" disabled></td></tr>
  <tr><td>Afzender</td><td><input id="afz" disabled></td></tr>
  <tr><td>Laadadres</td><td><input id="laadadres" disabled></td></tr>
@@ -50,17 +56,20 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const log = (t) => { $('status').textContent += '[' + t + ']'; };
-// Alleen ECHTE toetsaanslagen tellen voor de "Tab"-logica, zoals in een terminal-achtig systeem.
-$('afd').addEventListener('keydown', (e) => {
-  if (e.key === 'Tab' && $('afd').value.toUpperCase() === '60WH') setTimeout(() => { $('nieuw').style.display = ''; }, 200);
-});
-$('afd2').addEventListener('keydown', (e) => { if (e.key === 'Tab') { e.preventDefault(); $('afh').focus(); } });
+// Het systeem zet zelf de cursor in Afdeling.
+$('afd').focus();
+// Opdrachtgever alleen geldig als je er met Tab vanuit Soort/Master-velden bent gekomen (zoals BluJay).
+let viaTab = false;
+$('mdos').addEventListener('keydown', (e) => { if (e.key === 'Tab' && e.isTrusted) viaTab = true; });
+$('opdr').addEventListener('focus', () => { if (!viaTab) log('opdrachtgever zonder tab'); });
 let tabsNaOpdr = 0;
-$('opdr').addEventListener('keydown', (e) => { if (e.key === 'Tab') tabsNaOpdr = 1; });
-$('opdr2').addEventListener('keydown', (e) => {
-  if (e.key === 'Tab' && tabsNaOpdr === 1 && $('opdr').value === 'TOPBROUD' && $('afh').value === 'u') {
+$('opdr').addEventListener('keydown', (e) => { if (e.key === 'Tab' && e.isTrusted) tabsNaOpdr = 1; });
+$('sjab').addEventListener('keydown', (e) => {
+  if (e.key === 'Tab' && tabsNaOpdr === 1 && viaTab && $('opdr').value === 'TOPBROUD' && $('afh').value === 'u' && $('afd').value === '60WH') {
     e.preventDefault();
     setTimeout(() => {
+      $('nieuw').style.display = 'none';
+      $('dossier').style.display = '';
       document.querySelectorAll('#dossier input').forEach((i) => (i.disabled = false));
       $('afz').value = $('opdr').value;
       $('tabkop').textContent = 'Dossiernummer 60123456';

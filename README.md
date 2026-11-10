@@ -50,8 +50,10 @@ Daarna bevestigt hij:
 2. Klik op **Uitslagdossier aanmaken** en sleep de **paklijst (PDF)** in het vak (of klik erop om te kiezen).
    De klant wordt herkend (nu: **Top Brands → TOPBROUD**) en de velden worden ingevuld.
 3. Vul **laaddatum + laadtijd** en **losdatum + lostijd** in (tijd *tot* leeg = zelfde als *van*). Controleer de rest.
+   Snel typen kan: datum `11` + Tab → `11-<deze maand>-<dit jaar>`, `11-12` → `11-12-<dit jaar>`;
+   tijd `8` → `08:00`, `17` → `17:00`, `830` → `08:30`.
 4. Klik **▶ Uitvoeren**. Hij doet dan:
-   Uitslag → Uitslagorders → `60WH` Tab Tab → Afh.code `u` → Opdrachtgever → Tab Tab (dossier wordt gemaakt)
+   Uitslag → Uitslagorders → `60WH` → Tab tot Afh.code → `u` → Tab tot Opdrachtgever → Tab Tab (dossier wordt gemaakt)
    → Referentie, Laadadres, Laaddatum/-tijden, Konditie + plaats, **Laadref = nieuw dossiernummer**, Ontvanger, Losadres,
    Losdatum/-tijden, Losref → Enter → Aantal pallets aanklikken (bijv. 33 EP) → Enter → Menu → Omschrijvingen → Instructies uitslag
    → "Laden in de lengte" + Enter.
@@ -102,6 +104,9 @@ De ingebouwde handeling *Dossiermutaties draaien* wordt dan automatisch bijgewer
 - Er verschijnt rechtsonder een rode melding met het **stapnummer**; het logboek staat bij ⚙ → *Logboek*.
 - BluJay traag? Verhoog bij ⚙ → *Instellingen* de wachttijd en time-out, of de *Wacht*-stap na *Menu* (nu 1,5 s).
 - Neemt BluJay een ingevulde waarde niet over? Zet bij die stap (⋯) **Letter voor letter typen** aan.
+
+Tussen de velden gaat hij altijd met **Tab** (zoals jij), tot de cursor in het juiste veld staat. Hij springt niet
+naar andere velden; staat de cursor ooit buiten het formulier (bijv. bij de rol-keuze), dan klikt hij het veld weer aan.
 
 ## Ontwikkelen / testen
 
