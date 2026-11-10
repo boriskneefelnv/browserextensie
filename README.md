@@ -55,8 +55,7 @@ Daarna bevestigt hij:
 4. Klik **▶ Uitvoeren**. Hij doet dan:
    Uitslag → Uitslagorders → Zending `60WH` Tab Tab → Afh.code → `u` → Tab tot Opdrachtgever → Tab Tab (dossier wordt gemaakt)
    → Referentie, Laadadres, Laaddatum/-tijden, Konditie + plaats, **Laadref = nieuw dossiernummer**, Ontvanger, Losadres,
-   Losdatum/-tijden, Losref → Enter → Stapelbaar uit → Aantal pallets aanklikken (bijv. 33 EP) → Enter → Menu → Omschrijvingen → Instructies uitslag
-   → "Laden in de lengte" + Enter.
+   Losdatum/-tijden, Losref → Enter → Stapelbaar uit → Aantal pallets aanklikken (bijv. 33 EP) → Enter.
 
 | Uit de paklijst (Top Brands) | Dossierveld |
 |---|---|
@@ -65,7 +64,7 @@ Daarna bevestigt hij:
 | "33 pallets" | Aantal pallets (33 + EP) |
 | plaats van de afnemer | plaats achter Konditie |
 | klantnummer afnemer (bijv. K1300650) | Ontvanger/Losadres (bijv. ACTIOBIB) |
-| vast voor Top Brands | Laadadres NEELEMAA3, Konditie DDP, instructie "Laden in de lengte" |
+| vast voor Top Brands | Laadadres NEELEMAA3, Konditie DDP |
 
 Kent hij de ontvanger-code van een afnemer nog niet, dan blijft dat veld leeg (rood). Vul hem één keer in;
 daarna onthoudt hij hem voor dat klantnummer.

@@ -260,7 +260,7 @@ async function test(name, fn) {
   const uitslagVars = {
     laaddatum: '11-09-2026', laadtijd_van: '08:00', laadtijd_tot: '16:00', losdatum: '14-09-2026', lostijd_van: '14:00', lostijd_tot: '',
     opdrachtgever: 'TOPBROUD', referentie: '26SO270-011129', extraref: '', laadadres: 'NEELEMAA3', konditie: 'DDP', plaats: 'Biblis',
-    ontvanger: 'ACTIOBIB', losadres: '', losref: '2031479', pallets: '33', palletsoort: 'EP', instructie: 'Laden in de lengte',
+    ontvanger: 'ACTIOBIB', losadres: '', losref: '2031479', pallets: '33', palletsoort: 'EP',
   };
   const runUitslag = async (hash = '') => {
     const up = await context.newPage();
@@ -290,7 +290,7 @@ async function test(name, fn) {
     assert.deepStrictEqual([m.verwdat, m.verwtijd, m.wn], ['10-11-26', '07:59', 'BKN'], 'velden aangeraakt die niet aangeraakt mochten worden');
     assert.match(logText, /dossier aangemaakt\]\[opgeslagen\]/);
     assert.doesNotMatch(logText, /WAREHOUSE|ZOEKSCHERM|NIET/);
-    assert.strictEqual(instr, 'instructie: Laden in de lengte');
+    assert.strictEqual(instr, '', 'het menu/instructies hoort niet meer gebruikt te worden');
     await up.close();
   });
 

@@ -69,7 +69,7 @@ const PRESETS = [
   },
   {
     id: 'uitslagdossier',
-    version: 8,
+    version: 9,
     stepDelay: 60,
     name: 'Uitslagdossier aanmaken',
     description: 'Sleep de paklijst (PDF) hierheen. De klant wordt herkend en het dossier wordt helemaal ingevuld.',
@@ -94,7 +94,6 @@ const PRESETS = [
       { section: 'Uit de paklijst', name: 'losref', label: 'Losref' },
       { section: 'Uit de paklijst', row: 'pal', rowLabel: 'Aantal Pallets', name: 'pallets', label: 'Aantal pallets' },
       { section: 'Uit de paklijst', row: 'pal', name: 'palletsoort', label: 'Palletsoort', default: 'EP' },
-      { section: 'Uit de paklijst', name: 'instructie', label: 'Instructies uitslag' },
     ],
     triggers: [],
     steps: [
@@ -171,14 +170,8 @@ const PRESETS = [
       // → Verwachte datum, daar Enter = dossier opslaan
       { type: 'tabTo', selector: 'focus:Verwachte datum', value: '2' },
       { type: 'key', selector: 'focus', value: 'Enter' },
-      { type: 'wait', value: '1500' },
+      { type: 'wait', value: '1000' },
 
-      // 5. Menu (in de werkbalk, naast Artikelregels) → Omschrijvingen → Instructies uitslag → tekst + Enter
-      { type: 'click', selector: 'text=Menu', near: 'Artikelregels', when: '{{instructie}} != ' },
-      { type: 'click', selector: 'text=Omschrijvingen', when: '{{instructie}} != ' },
-      { type: 'click', selector: 'text=Instructies uitslag', when: '{{instructie}} != ' },
-      { type: 'type', selector: 'focus', value: '{{instructie}}', timeout: 15000, when: '{{instructie}} != ' },
-      { type: 'key', selector: 'focus', value: 'Enter', when: '{{instructie}} != ' },
       { type: 'notify', value: 'Dossier {{dossiernr}} is klaar.' },
     ],
   },

@@ -58,7 +58,6 @@ var BAParsers = (() => {
           losref: first(text, /SHIP\s*ID:?\s*(\d+)/i),
           pallets: first(text, /(\d+)\s*pallets?\b/i),
           palletsoort: 'EP',
-          instructie: 'Laden in de lengte',
           klantnummer,
           afnemer: [adres.naam, adres.plaats].filter(Boolean).join(', '),
         };
