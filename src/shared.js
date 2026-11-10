@@ -4,7 +4,7 @@
  * en als content script.
  */
 // eslint-disable-next-line no-unused-vars
-const BA = (() => {
+var BA = (() => {
   const DEFAULT_SETTINGS = {
     stepDelay: 300, // ms wachten tussen stappen
     timeout: 10000, // ms wachten tot een element verschijnt

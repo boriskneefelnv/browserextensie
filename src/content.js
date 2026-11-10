@@ -3,8 +3,11 @@
  * neemt handelingen op, element-kiezer en automatische starters.
  */
 (() => {
-  if (window.__blujayAssistent) return;
-  window.__blujayAssistent = true;
+  // Niet dubbel laden — tenzij de vorige versie van de extensie niet meer bestaat (na update/herladen).
+  if (window.__blujayAssistentAlive && window.__blujayAssistentAlive()) return;
+  window.__blujayAssistentAlive = () => {
+    try { return !!chrome.runtime?.id; } catch { return false; }
+  };
 
   const isTop = window === window.top;
   const send = (msg) => chrome.runtime.sendMessage(msg).catch(() => undefined);
@@ -362,9 +365,15 @@
     if (!el) throw new Error(`element niet gevonden: ${step.selector}`);
     if (step.type !== 'read') flash(el);
     switch (step.type) {
-      case 'click':
-        doClick(el);
-        return;
+      case 'click': {
+        // De klik zelf gebeurt via de achtergrond in de pagina-context ("MAIN world"),
+        // zodat ook links met href="javascript:..." werken. Hier alleen markeren.
+        el.scrollIntoView({ block: 'center', inline: 'center' });
+        const tag = Math.random().toString(36).slice(2);
+        el.setAttribute('data-ba-click', tag);
+        setTimeout(() => el.removeAttribute('data-ba-click'), 5000);
+        return { __clickTag: tag };
+      }
       case 'type':
         await typeText(el, step.value ?? '', !!step.slow);
         return;
@@ -587,7 +596,7 @@
   // ============================================================ meldingen (alleen bovenste frame)
 
   const ui = (() => {
-    let host, shadow, box, rec;
+    let host, shadow, box, rec, prog;
     function ensure() {
       if (host) return;
       host = document.createElement('div');
@@ -599,7 +608,7 @@
           :host { all: initial; }
           .wrap { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; font: 13px/1.4 system-ui, sans-serif; }
           .t { max-width: 420px; padding: 10px 14px; border-radius: 8px; color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.25); word-break: break-word; }
-          .info { background: #1565c0; } .ok { background: #2e7d32; } .error { background: #c62828; }
+          .info { background: #1565c0; } .prog { background: #0b3d6b; font-family: ui-monospace, Consolas, monospace; font-size: 12px; } .ok { background: #2e7d32; } .error { background: #c62828; }
           .rec { background: #fff; color: #c62828; border: 2px solid #c62828; padding: 6px 12px; border-radius: 999px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
           .dot { display: inline-block; width: 9px; height: 9px; background: #c62828; border-radius: 50%; margin-right: 6px; animation: b 1s infinite; }
           @keyframes b { 50% { opacity: .2; } }
@@ -616,6 +625,16 @@
         d.textContent = text;
         box.prepend(d);
         setTimeout(() => d.remove(), kind === 'error' ? 10000 : 4000);
+      },
+      progress(text) {
+        if (!text) { prog?.remove(); prog = null; return; }
+        ensure();
+        if (!prog) {
+          prog = document.createElement('div');
+          prog.className = 't info prog';
+          box.append(prog);
+        }
+        prog.textContent = text;
       },
       recIndicator(active, count) {
         if (!active) { rec?.remove(); rec = null; return; }
@@ -652,6 +671,16 @@
       case 'toast':
         if (isTop) ui.toast(msg.text, msg.kind);
         return false;
+      case 'progress':
+        if (isTop) ui.progress(msg.text);
+        return false;
+      case 'clickTagged': {
+        // Reserve: klikken vanuit het content script als de pagina-context niet bereikbaar is.
+        const el = document.querySelector(`[data-ba-click="${msg.tag}"]`);
+        if (el) { el.removeAttribute('data-ba-click'); doClick(el); }
+        sendResponse({ ok: !!el });
+        return false;
+      }
       case 'recordingState':
         setRecording(msg.active, msg.count);
         if (!msg.active) loadTriggers();

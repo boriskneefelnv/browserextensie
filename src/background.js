@@ -4,6 +4,9 @@
  */
 importScripts('shared.js', 'presets.js');
 
+// Klik op het icoon (of Alt+B) opent het zijpaneel; dat blijft open terwijl je in BluJay werkt.
+chrome.sidePanel?.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+
 const running = new Map(); // tabId -> { macroId, stopped }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -44,28 +47,61 @@ async function addLog(entry) {
 }
 
 // ---------------------------------------------------------------- uitvoeren
+//
+// Een lopende handeling ("ctrl") houdt bij in welke tabbladen hij werkt: het tabblad
+// waar hij gestart is, plus vensters/tabbladen die BluJay tijdens de handeling opent.
 
-/** Zoekt in welk frame het element staat. Geeft frameId terug of null. */
-async function locate(tabId, selector, { frameHint, timeout, ctrl, allowHidden = false, wantGone = false }) {
-  const deadline = Date.now() + timeout;
+function showProgress(ctrl, text) {
+  ctrl.progress = text;
+  for (const t of ctrl.tabs) sendToFrame(t, 0, { type: 'progress', text });
+}
+
+function toastAll(ctrl, text, kind) {
+  for (const t of ctrl.tabs) toast(t, text, kind);
+}
+
+function ctrlForTab(tabId) {
+  for (const ctrl of running.values()) if (ctrl.tabs.includes(tabId)) return ctrl;
+  return null;
+}
+
+// Door BluJay geopende vensters/tabbladen meenemen in de lopende handeling.
+chrome.webNavigation.onCreatedNavigationTarget.addListener((d) => {
+  const ctrl = ctrlForTab(d.sourceTabId);
+  if (ctrl && !ctrl.tabs.includes(d.tabId)) ctrl.tabs.push(d.tabId);
+});
+chrome.tabs.onCreated.addListener((tab) => {
+  const ctrl = tab.openerTabId != null ? ctrlForTab(tab.openerTabId) : null;
+  if (ctrl && !ctrl.tabs.includes(tab.id)) ctrl.tabs.push(tab.id);
+});
+
+/** Zoekt in welk tabblad/frame het element staat. Geeft { tabId, frameId } terug of null. */
+async function locate(ctrl, selector, { frameHint, timeout, allowHidden = false, wantGone = false, label = '' }) {
+  const started = Date.now();
+  const deadline = started + timeout;
   for (;;) {
-    let frames = [];
-    try {
-      frames = (await chrome.webNavigation.getAllFrames({ tabId })) || [];
-    } catch { /* tab weg */ }
-    const score = (f) => (frameHint && f.url.includes(frameHint) ? 0 : f.frameId === 0 ? 1 : 2);
-    frames.sort((a, b) => score(a) - score(b));
-
     let foundIn = null;
-    for (const f of frames) {
-      const r = await sendToFrame(tabId, f.frameId, { type: 'probe', selector, allowHidden });
-      if (r && r.error) throw new Error(r.error);
-      if (r && r.found) { foundIn = f.frameId; break; }
+    // Nieuwste tabblad (bijv. een net geopend venster) eerst.
+    for (const tabId of [...ctrl.tabs].reverse()) {
+      let frames = [];
+      try {
+        frames = (await chrome.webNavigation.getAllFrames({ tabId })) || [];
+      } catch { /* tab weg */ }
+      const score = (f) => (frameHint && f.url.includes(frameHint) ? 0 : f.frameId === 0 ? 1 : 2);
+      frames.sort((a, b) => score(a) - score(b));
+      for (const f of frames) {
+        const r = await sendToFrame(tabId, f.frameId, { type: 'probe', selector, allowHidden });
+        if (r && r.error) throw new Error(r.error);
+        if (r && r.found) { foundIn = { tabId, frameId: f.frameId }; break; }
+      }
+      if (foundIn) break;
     }
-    if (!wantGone && foundIn !== null) return foundIn;
-    if (wantGone && foundIn === null) return true;
+    if (!wantGone && foundIn) return foundIn;
+    if (wantGone && !foundIn) return true;
     if (ctrl.stopped) throw new Error('gestopt door gebruiker');
     if (Date.now() > deadline) return wantGone ? false : null;
+    const secs = Math.round((Date.now() - started) / 1000);
+    if (secs >= 2) showProgress(ctrl, `${label} — wacht ${wantGone ? 'tot weg' : 'op'} "${selector}" (${secs}s / ${Math.round(timeout / 1000)}s)`);
     await sleep(250);
   }
 }
@@ -81,7 +117,42 @@ async function waitForTabComplete(tabId, timeout) {
   }
 }
 
-async function runStep(tabId, step, vars, settings, ctrl) {
+/** Klikt in de pagina-context zelf, zodat ook href="javascript:..." links werken. */
+function mainWorldClick(tag) {
+  const el = document.querySelector(`[data-ba-click="${tag}"]`);
+  if (!el) return false;
+  el.removeAttribute('data-ba-click');
+  const r = el.getBoundingClientRect();
+  const opts = { bubbles: true, cancelable: true, composed: true, view: window, button: 0, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+  const fire = (type) => {
+    const C = type.startsWith('pointer') && window.PointerEvent ? PointerEvent : MouseEvent;
+    el.dispatchEvent(new C(type, opts));
+  };
+  fire('pointerdown');
+  fire('mousedown');
+  if (typeof el.focus === 'function') el.focus({ preventScroll: true });
+  fire('pointerup');
+  fire('mouseup');
+  if (typeof el.click === 'function') el.click();
+  else fire('click');
+  return true;
+}
+
+async function clickTagged(tabId, frameId, tag) {
+  try {
+    const [res] = await chrome.scripting.executeScript({
+      target: { tabId, frameIds: [frameId] },
+      world: 'MAIN',
+      func: mainWorldClick,
+      args: [tag],
+    });
+    if (res && res.result) return;
+  } catch { /* bijv. geen toegang: val terug op klikken vanuit het content script */ }
+  const r = await sendToFrame(tabId, frameId, { type: 'clickTagged', tag });
+  if (!r || !r.ok) throw new Error('klikken mislukt');
+}
+
+async function runStep(ctrl, step, vars, settings, label) {
   const fill = (s) => BA.fillTemplate(s, vars);
   const timeout = Number(step.timeout) || settings.timeout;
 
@@ -93,10 +164,11 @@ async function runStep(tabId, step, vars, settings, ctrl) {
       if (step.variable) vars[step.variable] = fill(step.value);
       return;
     case 'notify':
-      toast(tabId, fill(step.value), 'info');
+      toastAll(ctrl, fill(step.value), 'info');
       return;
     case 'navigate': {
       const url = fill(step.value);
+      const tabId = ctrl.tabs[ctrl.tabs.length - 1];
       await chrome.tabs.update(tabId, { url });
       await waitForTabComplete(tabId, Math.max(timeout, 30000));
       return;
@@ -109,71 +181,77 @@ async function runStep(tabId, step, vars, settings, ctrl) {
   if (!selector) throw new Error('geen element (selector) ingevuld');
 
   if (step.type === 'waitGone') {
-    const gone = await locate(tabId, selector, { frameHint: step.frame, timeout: Math.max(timeout, 30000), ctrl, wantGone: true });
+    const gone = await locate(ctrl, selector, { frameHint: step.frame, timeout: Math.max(timeout, 30000), wantGone: true, label });
     if (!gone) throw new Error(`element verdwijnt niet: ${selector}`);
     return;
   }
 
-  const frameId = await locate(tabId, selector, {
-    frameHint: step.frame,
-    timeout,
-    ctrl,
-    allowHidden: step.type === 'read',
-  });
-  if (frameId === null) throw new Error(`element niet gevonden: ${selector}`);
+  const where = await locate(ctrl, selector, { frameHint: step.frame, timeout, allowHidden: step.type === 'read', label });
+  if (!where) throw new Error(`element niet gevonden: ${selector}`);
   if (step.type === 'waitFor') return;
 
-  const res = await sendToFrame(tabId, frameId, {
+  const res = await sendToFrame(where.tabId, where.frameId, {
     type: 'exec',
     step: { ...step, selector, value: fill(step.value) },
   });
   if (!res) throw new Error('pagina reageerde niet (wordt hij herladen?)');
   if (!res.ok) throw new Error(res.error || 'onbekende fout');
+  if (res.value && res.value.__clickTag) {
+    await clickTagged(where.tabId, where.frameId, res.value.__clickTag);
+    return;
+  }
   if (step.type === 'read' && step.variable) vars[step.variable] = res.value;
 }
 
 async function runMacro(tabId, macroId, extraVars = {}, source = 'handmatig') {
-  if (running.has(tabId)) throw new Error('Er loopt al een handeling in dit tabblad.');
+  if (running.has(tabId) || ctrlForTab(tabId)) throw new Error('Er loopt al een handeling in dit tabblad.');
   if (await getRecording()) throw new Error('Stop eerst de opname.');
 
   const { macros, settings } = await BA.loadConfig();
   const macro = macros.find((m) => m.id === macroId);
   if (!macro) throw new Error('Handeling niet gevonden.');
 
-  const ctrl = { macroId, stopped: false };
+  const ctrl = { macroId, macroName: macro.name, stopped: false, tabs: [tabId], progress: '' };
   running.set(tabId, ctrl);
   setBadge(tabId, '▶', '#1565c0');
 
   const vars = { ...BA.builtinVars() };
-  for (const inp of macro.inputs) if (inp.name) vars[inp.name] = inp.default ?? '';
+  for (const inp of macro.inputs) if (inp.name) vars[inp.name] = BA.fillTemplate(inp.default ?? '', vars);
   Object.assign(vars, extraVars);
 
   const delay = Number(macro.stepDelay ?? settings.stepDelay) || 0;
   const started = Date.now();
+  const total = macro.steps.length;
   let error = null;
   let stepNr = 0;
 
   try {
-    for (let i = 0; i < macro.steps.length; i++) {
+    for (let i = 0; i < total; i++) {
       const step = macro.steps[i];
       stepNr = i + 1;
       if (ctrl.stopped) throw new Error('gestopt door gebruiker');
       if (step.disabled) continue;
       if (step.when && !BA.evalCondition(step.when, vars)) continue;
+      const typeLabel = BA.STEP_TYPES[step.type]?.label || step.type;
+      const label = `▶ ${macro.name} — stap ${stepNr}/${total}: ${typeLabel}`;
+      const detail = [BA.fillTemplate(step.selector || '', vars), BA.STEP_TYPES[step.type]?.value ? BA.fillTemplate(step.value ?? '', vars) : '']
+        .filter(Boolean).join(' → ');
+      showProgress(ctrl, detail ? `${label} (${detail})` : label);
       try {
-        const r = await runStep(tabId, step, vars, settings, ctrl);
+        const r = await runStep(ctrl, step, vars, settings, label);
         if (r === 'stop') break;
       } catch (e) {
         if (step.optional) continue;
-        const label = BA.STEP_TYPES[step.type]?.label || step.type;
-        throw new Error(`stap ${stepNr} (${label}): ${e.message}`);
+        throw new Error(`stap ${stepNr} (${typeLabel}): ${e.message}`);
       }
-      if (delay && i < macro.steps.length - 1) await sleep(delay);
+      if (delay && i < total - 1) await sleep(delay);
     }
-    toast(tabId, `✔ "${macro.name}" is uitgevoerd`, 'ok');
+    showProgress(ctrl, '');
+    toastAll(ctrl, `✔ "${macro.name}" is uitgevoerd`, 'ok');
   } catch (e) {
     error = e.message;
-    toast(tabId, `✖ "${macro.name}" mislukt — ${e.message}`, 'error');
+    showProgress(ctrl, '');
+    toastAll(ctrl, `✖ "${macro.name}" mislukt — ${e.message}`, 'error');
   } finally {
     running.delete(tabId);
     setBadge(tabId, '');
@@ -230,33 +308,36 @@ async function handleMessage(msg, sender) {
       const { macros } = await BA.loadConfig();
       const rec = await getRecording();
       const { lastPicked } = await chrome.storage.session.get('lastPicked');
+      const { log = [] } = await chrome.storage.local.get('log');
       return {
         url: tab?.url || '',
         macros,
         matching: macros.filter((m) => BA.urlMatches(m.urlPattern, tab?.url)).map((m) => m.id),
         recording: rec && rec.tabId === msg.tabId ? { count: rec.steps.length } : null,
         recordingElsewhere: !!(rec && rec.tabId !== msg.tabId),
-        running: running.has(msg.tabId) ? running.get(msg.tabId).macroId : null,
+        running: ctrlForTab(msg.tabId)?.macroId || null,
+        progress: ctrlForTab(msg.tabId)?.progress || '',
         lastPicked: lastPicked || null,
+        lastRun: log[0] || null,
       };
     }
 
     case 'runMacro': {
       const tabId = msg.tabId ?? senderTab;
-      if (running.has(tabId)) return { ok: false, error: 'Er loopt al een handeling in dit tabblad.' };
+      if (ctrlForTab(tabId)) return { ok: false, error: 'Er loopt al een handeling in dit tabblad.' };
       // Niet afwachten: de popup sluit vaak voordat de handeling klaar is.
       runMacro(tabId, msg.macroId, msg.vars || {}, msg.source || 'handmatig').catch((e) => toast(tabId, '✖ ' + e.message, 'error'));
       return { ok: true };
     }
 
     case 'stopMacro': {
-      const ctrl = running.get(msg.tabId);
+      const ctrl = ctrlForTab(msg.tabId);
       if (ctrl) ctrl.stopped = true;
       return { ok: true };
     }
 
     case 'triggerFired': {
-      if (running.has(senderTab) || (await getRecording())) return { ok: false };
+      if (ctrlForTab(senderTab) || (await getRecording())) return { ok: false };
       runMacro(senderTab, msg.macroId, msg.vars || {}, 'automatisch').catch(() => {});
       return { ok: true };
     }
@@ -386,3 +467,15 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   const ctrl = running.get(tabId);
   if (ctrl) ctrl.stopped = true;
 });
+
+// Na installeren/bijwerken: content script direct in open tabbladen laden (dan hoeft BluJay niet herladen te worden).
+async function injectIntoOpenTabs() {
+  const tabs = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] });
+  for (const tab of tabs) {
+    chrome.scripting.executeScript({
+      target: { tabId: tab.id, allFrames: true },
+      files: ['src/shared.js', 'src/content.js'],
+    }).catch(() => { /* bijv. beveiligde pagina */ });
+  }
+}
+chrome.runtime.onInstalled.addListener(() => { injectIntoOpenTabs(); });

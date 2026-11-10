@@ -159,15 +159,15 @@ async function test(name, fn) {
 
   // ------------------------------------------------------------ Dossiermutaties
   const dossierPage = await context.newPage();
-  const dossierTab = async () => sw.evaluate(async (url) => (await chrome.tabs.query({ url }))[0].id, `${base}/dossier/index.html`);
-  const openDossier = async () => {
-    await dossierPage.goto(`${base}/dossier/index.html`);
+  const dossierTab = async () => sw.evaluate(async (url) => (await chrome.tabs.query({ url: url + '*' })).find((t) => !t.url.endsWith('menu.html')).id, `${base}/dossier/`);
+  const openDossier = async (variant = 'index.html') => {
+    await dossierPage.goto(`${base}/dossier/${variant}`);
     await dossierPage.frameLocator('#side').locator('text=Menu').waitFor();
     await dossierPage.frameLocator('#main').locator('#k').waitFor();
     await dossierPage.waitForTimeout(300);
   };
   const dossierValues = async () => {
-    const f = dossierPage.frames().find((fr) => fr.url().endsWith('/cq0579.html'));
+    const f = context.pages().flatMap((pg) => pg.frames()).find((fr) => fr.url().endsWith('/cq0579.html'));
     return f.evaluate(() => [...document.querySelectorAll('input.v')].map((i) => i.value).concat(document.getElementById('status').textContent));
   };
   const runDossier = async (vars) => {
@@ -190,6 +190,20 @@ async function test(name, fn) {
     const res = await runDossier({ van: '2025-03', tot: '2026-02', klant: 'hen01' });
     assert.ok(res.ok, res.error);
     assert.deepStrictEqual(await dossierValues(), ['1', '99999', '1', '99', '60WH', '60WH', '25/03', '26/02', 'HEN01', 'HEN01', '1', '999999999999999', 'J', 'Klaar']);
+  });
+
+  await test('Dossiermutaties — Menu-link met javascript: (zoals oudere BluJay-schermen)', async () => {
+    await openDossier('index-js.html');
+    const res = await runDossier({ van: '2026-01', tot: '2026-12', klant: '' });
+    assert.ok(res.ok, res.error);
+    assert.deepStrictEqual(await dossierValues(), ['1', '99999', '1', '99', '60WH', '60WH', '26/01', '26/12', '', 'ZZZ', '1', '999999999999999', 'J', 'Klaar']);
+  });
+
+  await test('Dossiermutaties — Menu opent een nieuw venster', async () => {
+    await openDossier('index-popup.html');
+    const res = await runDossier({ van: '2026-01', tot: '2026-12', klant: 'X1' });
+    assert.ok(res.ok, res.error);
+    assert.deepStrictEqual(await dossierValues(), ['1', '99999', '1', '99', '60WH', '60WH', '26/01', '26/12', 'X1', 'X1', '1', '999999999999999', 'J', 'Klaar']);
   });
 
   await context.close();

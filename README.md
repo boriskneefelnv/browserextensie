@@ -6,11 +6,11 @@ klikken, velden invullen, toetsen indrukken, wachten — op basis van wat jij in
 ## Ingebouwde handeling: Dossiermutaties draaien
 
 1. Open BluJay.
-2. Klik op het extensie-icoon (of druk **Alt+B**).
+2. Klik op het extensie-icoon (of druk **Alt+B**). Rechts opent het **zijpaneel**; dat blijft open terwijl je werkt.
 3. Kies bij **Dossiermutaties draaien**:
    - **Van periode** en **T/m periode** (maand + jaar) — standaard januari t/m december van dit jaar
    - **Klantcode** — leeg laten = alle klanten
-4. Klik **▶ Uitvoeren**.
+4. Klik **▶ Uitvoeren**. In het zijpaneel en rechtsonder in BluJay zie je bij welke stap hij is.
 
 De extensie doet dan:
 
@@ -51,7 +51,7 @@ Daarna bevestigt hij:
 3. Zet rechtsboven **Ontwikkelaarsmodus** aan.
 4. Klik **Uitgepakte extensie laden** en kies de map (de map waar `manifest.json` in staat).
 5. Pin de extensie vast via het puzzelstukje in de werkbalk.
-6. **Herlaad het BluJay-tabblad** (F5), anders kent die pagina de extensie nog niet.
+6. Klik op het icoon: rechts opent het zijpaneel van BluJay Assistent.
 
 Na een update van de bestanden: klik op ↻ bij de extensie in `chrome://extensions` en herlaad BluJay.
 De ingebouwde handeling *Dossiermutaties draaien* wordt dan automatisch bijgewerkt naar de nieuwste versie

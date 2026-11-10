@@ -3,6 +3,7 @@ const send = (msg) => chrome.runtime.sendMessage(msg);
 
 let tabId = null;
 let info = null;
+let startedAt = 0;
 
 function showError(text) {
   $('error').textContent = text;
@@ -93,7 +94,8 @@ function renderMacro(m, isOther) {
     showError('');
     const res = await send({ type: 'runMacro', tabId, macroId: m.id, vars });
     if (!res?.ok) return showError(res?.error || 'Starten mislukt');
-    window.close();
+    startedAt = Date.now();
+    setTimeout(refresh, 300); // popup blijft open en toont de voortgang
   };
   runBtn.addEventListener('click', run);
   box.querySelectorAll('input[data-name]').forEach((i) => {
@@ -119,7 +121,19 @@ function render() {
 
   const running = info.running ? info.macros.find((m) => m.id === info.running) : null;
   $('runningBox').hidden = !running;
-  if (running) $('runningName').textContent = running.name;
+  if (running) {
+    $('runningName').textContent = running.name;
+    $('runningStep').textContent = info.progress || 'starten…';
+  }
+
+  // Resultaat van de laatste uitvoering (alleen als die net in deze popup gestart is of < 2 min geleden).
+  const last = info.lastRun;
+  const recent = last && Date.now() - new Date(last.time).getTime() < 2 * 60 * 1000;
+  $('lastRun').hidden = !!running || !recent;
+  if (!running && recent) {
+    $('lastRun').className = 'lastrun ' + (last.ok ? 'ok' : 'fail');
+    $('lastRun').textContent = last.ok ? `✔ "${last.macro}" is uitgevoerd.` : `✖ "${last.macro}" mislukt — ${last.error}`;
+  }
 
   $('recIdle').hidden = !!info.recording || info.recordingElsewhere;
   $('recActive').hidden = !info.recording;
@@ -137,14 +151,22 @@ async function refresh() {
   render();
 }
 
-async function init() {
+async function currentTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  tabId = tab?.id;
+  return tab?.id ?? null;
+}
+
+async function init() {
+  tabId = await currentTab();
+  // Zijpaneel: meebewegen met het actieve tabblad en met navigatie.
+  chrome.tabs.onActivated.addListener(async () => { tabId = await currentTab(); refresh(); });
+  chrome.tabs.onUpdated.addListener((id, change) => { if (id === tabId && change.status === 'complete') refresh(); });
+  chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local' && (changes.macros || changes.log)) refresh(); });
   const { popupShowAll } = await chrome.storage.local.get('popupShowAll');
   $('showAll').checked = !!popupShowAll;
   await refresh();
   // Opname-teller live bijwerken
-  setInterval(() => { if (info?.recording || info?.running) refresh(); }, 1000);
+  setInterval(() => { if (info?.recording || info?.running || Date.now() - startedAt < 3000) refresh(); }, 500);
 }
 
 $('openOptions').addEventListener('click', () => chrome.runtime.openOptionsPage());
@@ -159,7 +181,7 @@ $('stopRun').addEventListener('click', async () => {
 $('startRec').addEventListener('click', async () => {
   const res = await send({ type: 'startRecording', tabId });
   if (!res?.ok) return showError(res?.error || 'Opname starten mislukt (herlaad de pagina en probeer opnieuw).');
-  window.close();
+  refresh();
 });
 $('saveRec').addEventListener('click', async () => {
   const res = await send({ type: 'stopRecording', save: true, name: $('recName').value.trim() });
@@ -173,7 +195,7 @@ $('cancelRec').addEventListener('click', async () => {
 });
 $('pick').addEventListener('click', async () => {
   await send({ type: 'startPicker', tabId });
-  window.close();
+  startedAt = Date.now() + 20000; // even blijven verversen om het gekozen element te tonen
 });
 
 init().catch((e) => showError(e.message));
