@@ -1,0 +1,12 @@
+{
+  "name": "blujay-assistent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browserextensie die vaste handelingen uitvoert in BluJay.",
+  "scripts": {
+    "test": "node test/run-tests.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

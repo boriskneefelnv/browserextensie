@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <title>Demo TMS-scherm</title>
+  <style>
+    body { font: 14px system-ui, sans-serif; margin: 20px; }
+    fieldset { margin-bottom: 12px; }
+    label { display: inline-block; width: 120px; }
+    #loading { position: fixed; inset: 0; background: rgba(0,0,0,.2); display: none; }
+    iframe { width: 100%; height: 160px; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>Demo TMS-scherm (voor testen)</h1>
+  <fieldset>
+    <legend>Zoeken</legend>
+    <label for="orderNr">Ordernummer</label>
+    <input id="orderNr" name="orderNr" />
+    <button type="button" id="search-btn-48213" onclick="zoek()">Zoeken</button>
+  </fieldset>
+  <fieldset>
+    <legend>Order</legend>
+    <div><label>Klant:</label> <span id="klant"></span></div>
+    <div>
+      <label for="status">Status</label>
+      <select id="status">
+        <option value="">-- kies --</option>
+        <option value="P">Gepland</option>
+        <option value="O">Onderweg</option>
+        <option value="G">Geleverd</option>
+      </select>
+    </div>
+    <div><label>Opmerking</label> <input name="opmerking" /></div>
+    <div><label>Leverdatum</label> <input name="leverdatum" placeholder="dd-mm-jjjj" /></div>
+    <div><label><input type="checkbox" id="pod" /> POD ontvangen</label></div>
+    <div><label>Snelcode</label> <input name="snelcode" /></div>
+  </fieldset>
+  <iframe id="detail" src="demo-frame.html"></iframe>
+  <div id="loading"></div>
+  <p id="log"></p>
+  <script>
+    function zoek() {
+      const nr = document.getElementById('orderNr').value;
+      const l = document.getElementById('loading');
+      l.style.display = 'block';
+      setTimeout(() => {
+        document.getElementById('klant').textContent = nr === '123' ? 'Jansen Transport' : 'Onbekend';
+        l.style.display = 'none';
+      }, 600);
+    }
+    document.addEventListener('change', (e) => {
+      document.getElementById('log').textContent += `[change ${e.target.id || e.target.name}=${e.target.value}]`;
+    });
+  </script>
+</body>
+</html>

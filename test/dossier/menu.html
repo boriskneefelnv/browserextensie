@@ -1,0 +1,14 @@
+<!doctype html>
+<html><head><meta charset="utf-8"></head><body style="font:13px monospace">
+<script>document.write('<p>Menu geladen</p>')</script>
+<div style="position:absolute;bottom:20px"><span>Uw keuze &nbsp;:</span> <input class="fld" value="ts4117" size="8"></div>
+<script>
+  document.querySelector('.fld').addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const v = e.target.value.trim().toLowerCase();
+      if (v === 'cq0579') setTimeout(() => (location.href = 'cq0579.html'), 300);
+    }
+  });
+</script>
+</body></html>

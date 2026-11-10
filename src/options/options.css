@@ -1,0 +1,53 @@
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: #1d2733; background: #f6f8fa; }
+header { display: flex; align-items: center; gap: 10px; padding: 12px 20px; background: #0b3d6b; color: #fff; }
+header h1 { margin: 0; font-size: 18px; flex: 1; }
+.saved { font-size: 12px; opacity: .85; }
+.layout { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 54px); }
+aside { background: #fff; border-right: 1px solid #e1e5ea; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.aside-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+hr { border: none; border-top: 1px solid #e1e5ea; width: 100%; }
+nav { display: flex; flex-direction: column; gap: 2px; }
+nav button { text-align: left; border: none; background: transparent; padding: 8px 10px; border-radius: 6px; }
+nav button.active { background: #e3f0fd; color: #0b3d6b; font-weight: 600; }
+nav .count { float: right; color: #8b97a5; font-size: 12px; font-weight: normal; }
+main { padding: 20px 28px 60px; max-width: 1200px; }
+h2 { margin: 0 0 12px; font-size: 20px; }
+h3 { margin: 24px 0 8px; font-size: 15px; color: #0b3d6b; }
+.card { background: #fff; border: 1px solid #e1e5ea; border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+.card > h3:first-child { margin-top: 0; }
+.hint { color: #5b6878; font-size: 13px; margin: 0 0 10px; }
+button { font: inherit; padding: 6px 12px; border: 1px solid #c4ccd6; background: #fff; border-radius: 6px; cursor: pointer; }
+button:hover { background: #eef2f6; }
+button.primary { background: #1565c0; border-color: #1565c0; color: #fff; }
+button.primary:hover { background: #0d4f9a; }
+button.danger { color: #c62828; border-color: #e7b3b3; }
+button.link { border: none; background: none; text-align: left; padding: 6px 4px; color: #1d4f80; }
+button.wide { width: 100%; }
+button.mini { padding: 2px 7px; font-size: 13px; }
+input[type=text], input[type=number], select, textarea { font: inherit; padding: 6px 8px; border: 1px solid #c4ccd6; border-radius: 6px; background: #fff; width: 100%; }
+textarea { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+input.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+label.f { display: block; margin-bottom: 10px; }
+label.f > span { display: block; font-size: 12px; color: #3a4654; margin-bottom: 3px; font-weight: 600; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 12px; color: #5b6878; font-weight: 600; padding: 4px 4px 6px; }
+td { padding: 3px 4px; vertical-align: top; }
+td.nr { color: #8b97a5; width: 28px; padding-top: 9px; text-align: right; }
+td.actions { white-space: nowrap; width: 1%; }
+tr.step-row.disabled td:not(.actions) { opacity: .45; }
+tr.details td { padding: 4px 4px 12px 36px; }
+tr.details .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 12px; background: #f6f8fa; padding: 10px; border-radius: 8px; }
+.checks { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; grid-column: 1 / -1; font-size: 13px; }
+.checks label { display: flex; gap: 4px; align-items: center; }
+.small-label { font-size: 11px; color: #5b6878; display: block; margin-bottom: 2px; }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.empty { color: #5b6878; font-style: italic; }
+.log-entry { display: grid; grid-template-columns: 150px 1fr; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid #eef1f4; font-size: 13px; }
+.log-entry .ok { color: #2e7d32; font-weight: 600; }
+.log-entry .fail { color: #c62828; font-weight: 600; }
+.log-entry code { background: #f1f3f5; padding: 1px 4px; border-radius: 4px; }
+code { background: #f1f3f5; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+kbd { border: 1px solid #c4ccd6; border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; font-size: 12px; }
+details summary { cursor: pointer; color: #1d4f80; }
