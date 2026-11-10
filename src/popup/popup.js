@@ -1,9 +1,13 @@
+/*
+ * Zijpaneel: overzicht van acties → klik → invulscherm van die actie.
+ */
 const $ = (id) => document.getElementById(id);
 const send = (msg) => chrome.runtime.sendMessage(msg);
 
 let tabId = null;
 let info = null;
 let startedAt = 0;
+let view = null; // null = overzicht, anders macroId
 
 function showError(text) {
   $('error').textContent = text;
@@ -17,52 +21,83 @@ function el(tag, attrs = {}, ...children) {
     else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
     else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : v);
   }
-  for (const c of children) if (c != null) e.append(c);
+  for (const c of children.flat()) if (c != null && c !== false) e.append(c);
   return e;
 }
 
-function renderInput(m, inp) {
+// ---------------------------------------------------------------- invoervelden
+
+const MONTHS = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
+
+function monthText(v) {
+  const m = v.match(/^(\d{4})-(\d{2})$/);
+  return m ? `${MONTHS[Number(m[2]) - 1]} ${m[1]}` : v;
+}
+
+function makeInput(m, inp) {
   const type = BA.INPUT_TYPES[inp.type] ? inp.type : 'text';
-  const id = `in-${m.id}-${inp.name}`;
   const input = el('input', {
     type,
-    id,
+    id: `in-${m.id}-${inp.name}`,
     'data-name': inp.name,
     'data-type': type,
     'data-label': inp.label || inp.name,
     'data-required': inp.required ? '1' : null,
+    title: inp.label || inp.name,
     placeholder: type === 'text' ? inp.placeholder || '' : null,
     autocomplete: 'off',
   });
   input.value = BA.fillTemplate(inp.default || '', BA.builtinVars());
-  return el('div', { class: type === 'text' ? 'full' : 'half' },
-    el('label', { for: id }, inp.label || inp.name),
-    input
-  );
+  return input;
 }
 
-const MONTHS = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
+/** Velden per sectie (kader) en per regel; velden met dezelfde "row" komen naast elkaar. */
+function renderFields(m) {
+  const sets = [];
+  let set = null;
+  let row = null;
+  for (const inp of m.inputs.filter((i) => i.name)) {
+    const section = inp.section || '';
+    if (!set || set.section !== section) {
+      set = { section, node: el('fieldset', {}, section ? el('legend', {}, section) : null) };
+      sets.push(set);
+      row = null;
+    }
+    const input = makeInput(m, inp);
+    if (row && inp.row && row.key === inp.row) {
+      row.fields.append(input);
+      continue;
+    }
+    const fields = el('div', { class: 'fields' }, input);
+    const label = inp.rowLabel || inp.label || inp.name;
+    set.node.append(el('div', { class: 'frow' },
+      el('label', { for: input.id, title: label }, label, inp.required ? el('span', { class: 'req' }, ' *') : null),
+      fields));
+    row = { key: inp.row || null, fields };
+  }
+  return sets.map((s) => s.node);
+}
 
 function collectVars(box) {
   const vars = {};
   const months = [];
   for (const input of box.querySelectorAll('input[data-name]')) {
     const v = input.value.trim();
-    if (input.dataset.required && !v) throw new Error(`Vul "${input.dataset.label}" in.`);
+    if (input.dataset.required && !v) {
+      input.classList.add('missing');
+      input.focus();
+      throw new Error(`Vul "${input.dataset.label}" in.`);
+    }
     vars[input.dataset.name] = v;
     if (input.dataset.type === 'month' && v) months.push({ label: input.dataset.label, v });
   }
-  // Van-periode mag niet na t/m-periode liggen.
   for (let i = 1; i < months.length; i++) {
     if (months[i].v < months[i - 1].v) throw new Error(`"${months[i].label}" ligt vóór "${months[i - 1].label}".`);
   }
   return vars;
 }
 
-function monthText(v) {
-  const m = v.match(/^(\d{4})-(\d{2})$/);
-  return m ? `${MONTHS[Number(m[2]) - 1]} ${m[1]}` : v;
-}
+// ---------------------------------------------------------------- paklijst (PDF)
 
 const PDF_BASE = chrome.runtime.getURL('src/lib/pdfjs/');
 
@@ -90,68 +125,63 @@ async function readPdf(file, box, m, status) {
     box.dataset.klantnummer = waarden.klantnummer || '';
     const ontbreekt = m.inputs.filter((i) => i.required && !['date', 'time'].includes(i.type) && !waarden[i.name]).map((i) => i.label);
     status.className = 'pdfstatus ok';
-    status.textContent = `✔ ${klant.naam}${waarden.afnemer ? ' → ' + waarden.afnemer : ''}  ·  ${file.name}` +
+    status.textContent = `✔ ${klant.naam}${waarden.afnemer ? ' → ' + waarden.afnemer : ''}\n${file.name}` +
       (ontbreekt.length ? `\n⚠ Niet gevonden, vul zelf in: ${ontbreekt.join(', ')}` : '');
-    const firstEmpty = [...box.querySelectorAll('input[data-required]')].find((i) => !i.value);
-    firstEmpty?.focus();
+    [...box.querySelectorAll('input[data-required]')].find((i) => !i.value)?.focus();
   } catch (e) {
     status.className = 'pdfstatus fail';
     status.textContent = `✖ PDF lezen mislukt: ${e.message}`;
   }
 }
 
-function renderMacro(m, isOther) {
-  const inputs = m.inputs.filter((i) => i.name);
-  const fields = [];
-  let section = null;
-  for (const inp of inputs) {
-    if (inp.section && inp.section !== section) {
-      section = inp.section;
-      fields.push(el('div', { class: 'sec full' }, section));
-    }
-    fields.push(renderInput(m, inp));
-  }
-  const runBtn = el('button', { class: 'primary small' }, '▶ Uitvoeren');
+function makePdfZone(m, getBox) {
+  const file = el('input', { type: 'file', accept: 'application/pdf,.pdf', hidden: true });
+  const status = el('p', { class: 'pdfstatus' });
+  const zone = el('div', { class: 'drop', tabindex: '0' }, '📄 Sleep de paklijst (PDF) hierheen', el('br'), el('span', {}, 'of klik om een bestand te kiezen'), file);
+  zone.addEventListener('click', () => file.click());
+  zone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') file.click(); });
+  zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    zone.classList.remove('over');
+    const f = e.dataTransfer.files[0];
+    if (f) readPdf(f, getBox(), m, status);
+  });
+  file.addEventListener('change', () => { if (file.files[0]) readPdf(file.files[0], getBox(), m, status); file.value = ''; });
+  return [zone, status];
+}
+
+// ---------------------------------------------------------------- detailscherm van een actie
+
+function renderDetail(m) {
+  const backBtn = el('button', { class: 'tb', title: 'Terug naar het overzicht' }, el('span', { class: 'ico' }, '◂'), 'Terug');
+  const runTop = el('button', { class: 'tb go' }, el('span', { class: 'ico' }, '▶'), 'Uitvoeren');
+  const runBtn = el('button', { class: 'bj-btn primary' }, '▶ Uitvoeren');
   const summary = el('p', { class: 'summary' });
-  const showSummary = inputs.length > 0 && inputs.length <= 4;
+  const showSummary = false; // velden staan al overzichtelijk in het formulier
+  let box = null;
 
-  let pdfZone = null;
-  let pdfStatus = null;
-  if (m.pdf) {
-    const file = el('input', { type: 'file', accept: 'application/pdf,.pdf', hidden: true });
-    pdfStatus = el('p', { class: 'pdfstatus' });
-    pdfZone = el('div', { class: 'drop', tabindex: '0' }, '📄 Sleep de paklijst (PDF) hierheen', el('br'), el('span', {}, 'of klik om een bestand te kiezen'), file);
-    pdfZone.addEventListener('click', () => file.click());
-    pdfZone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') file.click(); });
-    pdfZone.addEventListener('dragover', (e) => { e.preventDefault(); pdfZone.classList.add('over'); });
-    pdfZone.addEventListener('dragleave', () => pdfZone.classList.remove('over'));
-    pdfZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      pdfZone.classList.remove('over');
-      const f = e.dataTransfer.files[0];
-      if (f) readPdf(f, box, m, pdfStatus);
-    });
-    file.addEventListener('change', () => { if (file.files[0]) readPdf(file.files[0], box, m, pdfStatus); file.value = ''; });
-  }
-
-  const box = el('div', { class: 'macro' + (isOther ? ' other' : '') },
-    el('div', { class: 'macro-head' }, el('strong', {}, m.name), runBtn),
-    m.description ? el('p', { class: 'desc' }, m.description) : null,
-    m.triggers.some((t) => t.enabled !== false && t.selector) ? el('div', { class: 'auto' }, '⚡ start ook automatisch') : null,
-    pdfZone,
-    pdfStatus,
-    fields.length ? el('div', { class: 'inputs' }, ...fields) : null,
-    showSummary ? summary : null
+  box = el('div', {},
+    el('div', { class: 'tabkop' }, m.name),
+    el('div', { class: 'sheet' },
+      el('div', { class: 'toolbar' }, backBtn, runTop),
+      m.description ? el('p', { class: 'desc' }, m.description) : null,
+      m.pdf ? makePdfZone(m, () => box) : null,
+      renderFields(m),
+      showSummary ? summary : null,
+      el('div', { class: 'actions' }, runBtn)
+    )
   );
+
   const updateSummary = () => {
     if (!showSummary) return;
-    const parts = [];
-    for (const input of box.querySelectorAll('input[data-name]')) {
-      const v = input.value.trim();
-      parts.push(`${input.dataset.label}: ${input.dataset.type === 'month' ? monthText(v) || '—' : v || '(leeg)'}`);
-    }
-    summary.textContent = parts.join(' · ');
+    summary.textContent = [...box.querySelectorAll('input[data-name]')].map((i) => {
+      const v = i.value.trim();
+      return `${i.dataset.label}: ${i.dataset.type === 'month' ? monthText(v) || '—' : v || '(leeg)'}`;
+    }).join(' · ');
   };
+
   const run = async () => {
     let vars;
     try {
@@ -169,43 +199,78 @@ function renderMacro(m, isOther) {
     const res = await send({ type: 'runMacro', tabId, macroId: m.id, vars });
     if (!res?.ok) return showError(res?.error || 'Starten mislukt');
     startedAt = Date.now();
-    setTimeout(refresh, 300); // paneel blijft open en toont de voortgang
+    setTimeout(refresh, 300);
   };
+
+  backBtn.addEventListener('click', () => { view = null; showError(''); render(); });
+  runTop.addEventListener('click', run);
   runBtn.addEventListener('click', run);
   box.querySelectorAll('input[data-name]').forEach((i) => {
     i.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
     i.addEventListener('input', () => { updateSummary(); i.classList.remove('missing'); });
   });
   updateSummary();
-  return { box, runBtn };
+  return { box, runBtns: [runTop, runBtn] };
 }
 
-// Kaarten hergebruiken bij verversen, zodat ingevulde waarden niet verdwijnen.
-const cards = new Map(); // macroId -> { json, box, runBtn }
+// Detailschermen hergebruiken bij verversen, zodat ingevulde waarden niet verdwijnen.
+const details = new Map(); // macroId -> { json, box, runBtns }
 
-function card(m, isOther) {
-  const json = JSON.stringify(m) + isOther;
-  let c = cards.get(m.id);
-  if (!c || c.json !== json) {
-    c = { json, ...renderMacro(m, isOther) };
-    cards.set(m.id, c);
+function detailFor(m) {
+  const json = JSON.stringify(m);
+  let d = details.get(m.id);
+  if (!d || d.json !== json) {
+    d = { json, ...renderDetail(m) };
+    details.set(m.id, d);
   }
-  c.runBtn.disabled = !!info.running || !!info.recording;
-  return c.box;
+  for (const b of d.runBtns) b.disabled = !!info.running || !!info.recording;
+  return d.box;
+}
+
+// ---------------------------------------------------------------- overzicht
+
+function overviewItem(m, isOther) {
+  const isRunning = info.running === m.id;
+  const tag = isRunning ? el('span', { class: 'tag run' }, 'bezig')
+    : m.pdf ? el('span', { class: 'tag' }, 'PDF')
+      : m.triggers.some((t) => t.enabled !== false && t.selector) ? el('span', { class: 'tag' }, 'auto') : null;
+  return el('a', { class: 'item' + (isOther ? ' other' : ''), tabindex: '0', onclick: () => openMacro(m.id), onkeydown: (e) => { if (e.key === "Enter") openMacro(m.id); } },
+    el('span', { class: 'bullet' }),
+    el('span', {}, el('span', { class: 'name' }, m.name), m.description ? el('span', { class: 'sub' }, m.description) : null),
+    tag);
+}
+
+function openMacro(id) {
+  view = id;
+  showError('');
+  render();
+  window.scrollTo(0, 0);
 }
 
 function render() {
-  const list = $('macroList');
-  list.textContent = '';
-  const matching = info.macros.filter((m) => info.matching.includes(m.id));
-  const others = info.macros.filter((m) => !info.matching.includes(m.id));
-  if (!matching.length) {
-    list.append(el('p', { class: 'empty' }, info.macros.length
-      ? 'Geen handelingen voor deze pagina.'
-      : 'Nog geen handelingen. Neem er hieronder een op, of maak er een via ⚙.'));
+  if (!info) return;
+  const macro = view ? info.macros.find((m) => m.id === view) : null;
+  if (view && !macro) view = null;
+
+  $('overview').hidden = !!macro;
+  $('detail').hidden = !macro;
+
+  if (macro) {
+    const box = detailFor(macro);
+    if ($('detail').firstChild !== box) $('detail').replaceChildren(box);
+  } else {
+    const list = $('macroList');
+    const matching = info.macros.filter((m) => info.matching.includes(m.id));
+    const others = info.macros.filter((m) => !info.matching.includes(m.id));
+    const items = matching.map((m) => overviewItem(m, false));
+    if ($('showAll').checked) items.push(...others.map((m) => overviewItem(m, true)));
+    if (!items.length) {
+      items.push(el('p', { class: 'empty' }, info.macros.length
+        ? 'Geen acties voor deze pagina.'
+        : 'Nog geen acties. Neem er een op via "Extra".'));
+    }
+    list.replaceChildren(...items);
   }
-  matching.forEach((m) => list.append(card(m, false)));
-  if ($('showAll').checked) others.forEach((m) => list.append(card(m, true)));
 
   const running = info.running ? info.macros.find((m) => m.id === info.running) : null;
   $('runningBox').hidden = !running;
@@ -214,16 +279,15 @@ function render() {
     $('runningStep').textContent = info.progress || 'starten…';
   }
 
-  // Resultaat van de laatste uitvoering (alleen als die net in deze popup gestart is of < 2 min geleden).
+  // Resultaat van de laatste uitvoering (< 2 min geleden).
   const last = info.lastRun;
   const recent = last && Date.now() - new Date(last.time).getTime() < 2 * 60 * 1000;
   $('lastRun').hidden = !!running || !recent;
   if (!running && recent) {
-    $('lastRun').className = 'lastrun ' + (last.ok ? 'ok' : 'fail');
+    $('lastRun').className = 'msg ' + (last.ok ? 'ok' : 'fail');
     $('lastRun').textContent = last.ok ? `✔ "${last.macro}" is uitgevoerd.` : `✖ "${last.macro}" mislukt — ${last.error}`;
   }
 
-  $('recIdle').hidden = !!info.recording || info.recordingElsewhere;
   $('recActive').hidden = !info.recording;
   $('recElsewhere').hidden = !info.recordingElsewhere;
   if (info.recording) $('recCount').textContent = info.recording.count;
@@ -253,11 +317,12 @@ async function init() {
   const { popupShowAll } = await chrome.storage.local.get('popupShowAll');
   $('showAll').checked = !!popupShowAll;
   await refresh();
-  // Opname-teller live bijwerken
   setInterval(() => { if (info?.recording || info?.running || Date.now() - startedAt < 3000) refresh(); }, 500);
 }
 
-$('openOptions').addEventListener('click', () => chrome.runtime.openOptionsPage());
+const openOptions = () => chrome.runtime.openOptionsPage();
+$('openOptions').addEventListener('click', openOptions);
+$('openOptions2').addEventListener('click', openOptions);
 $('showAll').addEventListener('change', () => {
   chrome.storage.local.set({ popupShowAll: $('showAll').checked });
   render();
@@ -267,6 +332,7 @@ $('stopRun').addEventListener('click', async () => {
   refresh();
 });
 $('startRec').addEventListener('click', async () => {
+  if (info?.recordingElsewhere) return showError('Er loopt al een opname in een ander tabblad.');
   const res = await send({ type: 'startRecording', tabId });
   if (!res?.ok) return showError(res?.error || 'Opname starten mislukt (herlaad de pagina en probeer opnieuw).');
   refresh();

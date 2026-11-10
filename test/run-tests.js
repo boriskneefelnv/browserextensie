@@ -212,7 +212,8 @@ async function test(name, fn) {
     const extId = new URL(sw.url()).host;
     const panel = await context.newPage();
     await panel.goto(`chrome-extension://${extId}/src/popup/popup.html`);
-    const card = panel.locator('.macro', { hasText: 'Uitslagdossier aanmaken' });
+    await panel.locator('#macroList .item', { hasText: 'Uitslagdossier aanmaken' }).click();
+    const card = panel.locator('#detail');
     await card.locator('input[type=file]').setInputFiles(path.join(__dirname, 'fixtures/paklijst-topbrands-test.pdf'));
     await card.locator('.pdfstatus.ok').waitFor({ timeout: 15000 });
     const val = (n) => card.locator(`input[data-name="${n}"]`).inputValue();
@@ -231,7 +232,7 @@ async function test(name, fn) {
     for (const [n, v] of [['laaddatum', '2026-10-05'], ['laadtijd_van', '08:00'], ['losdatum', '2026-10-07'], ['lostijd_van', '14:00']]) {
       await card.locator(`input[data-name="${n}"]`).fill(v);
     }
-    await card.locator('button', { hasText: 'Uitvoeren' }).click();
+    await card.locator('.actions button', { hasText: 'Uitvoeren' }).click();
     await panel.waitForTimeout(500);
     const codes = await sw.evaluate(async () => (await chrome.storage.local.get('ontvangerCodes')).ontvangerCodes);
     assert.deepStrictEqual(codes, { K9999999: 'TESTONTV' });
@@ -239,7 +240,8 @@ async function test(name, fn) {
     await panel.waitForTimeout(500);
     // Tweede keer: code wordt automatisch ingevuld
     await panel.reload();
-    const card2 = panel.locator('.macro', { hasText: 'Uitslagdossier aanmaken' });
+    await panel.locator('#macroList .item', { hasText: 'Uitslagdossier aanmaken' }).click();
+    const card2 = panel.locator('#detail');
     await card2.locator('input[type=file]').setInputFiles(path.join(__dirname, 'fixtures/paklijst-topbrands-test.pdf'));
     await card2.locator('.pdfstatus.ok').waitFor({ timeout: 15000 });
     assert.strictEqual(await card2.locator('input[data-name="ontvanger"]').inputValue(), 'TESTONTV');
@@ -267,7 +269,7 @@ async function test(name, fn) {
       [v.afh, v.soort, v.opdr, v.ref, v.extra, v.afz, v.laadadres, v.laaddat, v.laadvan, v.laadtot, v.kond, v.kondplaats, v.laadref, v.ontv, v.losadres, v.losdat, v.losvan, v.lostot, v.losref, v.pal, v.palsoort],
       ['u', 'd', 'TOPBROUD', '26SO270-011129', '', 'TOPBROUD', 'NEELEMAA3', '11-09-26', '08:00', '08:00', 'DDP', 'Biblis', '60123456', 'ACTIOBIB', 'ACTIOBIB', '14-09-26', '14:00', '14:00', '2031479', '33', 'EP']
     );
-    assert.match(extra.status, /dossier aangemaakt.*opgeslagen/);
+    assert.match(extra.status, /dossier aangemaakt\]\[opgeslagen\]\[pallets opgeslagen/);
     assert.strictEqual(extra.instr, 'instructie: Laden in de lengte');
     await up.close();
   });

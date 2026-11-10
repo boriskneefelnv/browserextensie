@@ -71,6 +71,7 @@ $('opdr2').addEventListener('keydown', (e) => {
   }
 });
 $('losref').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.isTrusted) log('opgeslagen'); });
+$('palsoort').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.isTrusted) log('pallets opgeslagen'); });
 $('menuBtn').addEventListener('click', () => { $('menu').style.display = 'block'; });
 $('omschr').addEventListener('mouseover', () => { $('sub').style.display = 'block'; });
 $('instrItem').addEventListener('click', (e) => { e.stopPropagation(); $('menu').style.display = 'none'; $('instr').style.display = 'block'; $('instrText').focus(); });

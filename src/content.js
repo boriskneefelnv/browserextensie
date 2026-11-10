@@ -651,11 +651,15 @@
       shadow.innerHTML = `
         <style>
           :host { all: initial; }
-          .wrap { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; font: 13px/1.4 system-ui, sans-serif; }
-          .t { max-width: 420px; padding: 10px 14px; border-radius: 8px; color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.25); word-break: break-word; }
-          .info { background: #1565c0; } .prog { background: #0b3d6b; font-family: ui-monospace, Consolas, monospace; font-size: 12px; } .ok { background: #2e7d32; } .error { background: #c62828; }
-          .rec { background: #fff; color: #c62828; border: 2px solid #c62828; padding: 6px 12px; border-radius: 999px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
-          .dot { display: inline-block; width: 9px; height: 9px; background: #c62828; border-radius: 50%; margin-right: 6px; animation: b 1s infinite; }
+          .wrap { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; font: 11px/1.45 Verdana, Geneva, Tahoma, sans-serif; }
+          .t { max-width: 420px; padding: 0; border: 1px solid #174a7c; background: #fff; color: #222; box-shadow: 0 3px 10px rgba(0,0,0,.25); word-break: break-word; }
+          .t::before { content: 'Neele-Vat BluJay Assistent'; display: block; padding: 3px 8px; color: #fff; font-weight: bold; background: linear-gradient(#2f6fab, #1f5c97); }
+          .t { padding-bottom: 6px; } .t { text-indent: 0; }
+          .t > span { display: block; padding: 5px 8px 0; }
+          .info { } .ok::before { background: linear-gradient(#57b45b, #2e7d32); } .error::before { background: linear-gradient(#d84a4a, #b52a2a); }
+          .prog > span { font-family: Consolas, 'Courier New', monospace; }
+          .rec { background: #fff; color: #b52a2a; border: 1px solid #b52a2a; padding: 4px 10px; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+          .dot { display: inline-block; width: 8px; height: 8px; background: #c62828; border-radius: 50%; margin-right: 6px; animation: b 1s infinite; }
           @keyframes b { 50% { opacity: .2; } }
         </style>
         <div class="wrap"></div>`;
@@ -667,7 +671,7 @@
         ensure();
         const d = document.createElement('div');
         d.className = 't ' + kind;
-        d.textContent = text;
+        d.append(Object.assign(document.createElement('span'), { textContent: text }));
         box.prepend(d);
         setTimeout(() => d.remove(), kind === 'error' ? 10000 : 4000);
       },
@@ -679,7 +683,7 @@
           prog.className = 't info prog';
           box.append(prog);
         }
-        prog.textContent = text;
+        prog.replaceChildren(Object.assign(document.createElement('span'), { textContent: text }));
       },
       recIndicator(active, count) {
         if (!active) { rec?.remove(); rec = null; return; }

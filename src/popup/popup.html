@@ -2,56 +2,57 @@
 <html lang="nl">
 <head>
   <meta charset="utf-8" />
-  <title>BluJay Assistent</title>
+  <title>Neele-Vat BluJay Assistent</title>
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
-  <header>
-    <img src="../../icons/icon32.png" alt="" width="20" height="20" />
-    <h1>BluJay Assistent</h1>
-    <button id="openOptions" class="icon" title="Handelingen beheren">⚙</button>
+  <header class="appbar">
+    <span class="appname">Neele-Vat BluJay Assistent</span>
+    <button id="openOptions" class="appbar-btn" title="Acties beheren">Beheer</button>
   </header>
 
-  <p id="error" class="error" hidden></p>
+  <p id="error" class="msg fail" hidden></p>
+  <p id="lastRun" class="msg" hidden></p>
 
-  <p id="lastRun" class="lastrun" hidden></p>
-
-  <section id="runningBox" hidden>
-    <div class="running">
-      <span>▶ Bezig: <strong id="runningName"></strong></span>
-      <button id="stopRun" class="danger small">Stop</button>
+  <div id="runningBox" class="box running" hidden>
+    <div class="box-title">Bezig: <span id="runningName"></span></div>
+    <div class="box-body">
+      <p id="runningStep" class="progress"></p>
+      <button id="stopRun" class="bj-btn danger">■ Stop</button>
     </div>
-    <p id="runningStep" class="progress"></p>
-  </section>
+  </div>
 
-  <section>
-    <h2>Handelingen voor deze pagina</h2>
-    <div id="macroList"></div>
-    <label class="toggle"><input type="checkbox" id="showAll" /> Toon ook handelingen voor andere pagina's</label>
-  </section>
-
-  <section id="recordSection">
-    <h2>Opnemen</h2>
-    <div id="recIdle">
-      <p class="hint">Neem een vaste handeling op door hem één keer zelf uit te voeren in BluJay.</p>
-      <button id="startRec" class="rec">● Nieuwe handeling opnemen</button>
-    </div>
-    <div id="recActive" hidden>
-      <p><span class="dot"></span>Opname loopt: <strong id="recCount">0</strong> stap(pen)</p>
-      <input id="recName" type="text" placeholder="Naam van de handeling" />
+  <div id="recActive" class="box rec" hidden>
+    <div class="box-title"><span class="dot"></span>Opname loopt — <span id="recCount">0</span> stap(pen)</div>
+    <div class="box-body">
+      <input id="recName" type="text" placeholder="Naam van de nieuwe actie" />
       <div class="row">
-        <button id="saveRec" class="primary">Stoppen &amp; opslaan</button>
-        <button id="cancelRec">Annuleren</button>
+        <button id="saveRec" class="bj-btn primary">Stoppen &amp; opslaan</button>
+        <button id="cancelRec" class="bj-btn">Annuleren</button>
       </div>
     </div>
-    <p id="recElsewhere" class="hint" hidden>Er loopt een opname in een ander tabblad.</p>
-  </section>
+  </div>
 
-  <section>
-    <h2>Hulpmiddelen</h2>
-    <button id="pick">🎯 Element kiezen (selector kopiëren)</button>
-    <div id="picked" class="picked" hidden></div>
-  </section>
+  <!-- Overzicht -->
+  <main id="overview">
+    <div class="menu-head">Acties</div>
+    <nav id="macroList" class="menu"></nav>
+    <label class="toggle"><input type="checkbox" id="showAll" /> Ook acties voor andere pagina's tonen</label>
+
+    <details class="extra">
+      <summary class="menu-head small">Extra</summary>
+      <nav class="menu">
+        <a id="startRec" class="item"><span class="bullet red"></span>Nieuwe actie opnemen</a>
+        <a id="pick" class="item"><span class="bullet"></span>Element kiezen (selector kopiëren)</a>
+        <a id="openOptions2" class="item"><span class="bullet"></span>Acties beheren en bewerken</a>
+      </nav>
+      <p id="recElsewhere" class="hint" hidden>Er loopt een opname in een ander tabblad.</p>
+      <div id="picked" class="picked" hidden></div>
+    </details>
+  </main>
+
+  <!-- Detail van één actie -->
+  <main id="detail" hidden></main>
 
   <script src="../shared.js"></script>
   <script src="../pdftext.js"></script>

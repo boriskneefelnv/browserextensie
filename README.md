@@ -1,4 +1,4 @@
-# BluJay Assistent
+# Neele-Vat BluJay Assistent
 
 Browserextensie (Chrome / Edge) die vaste handelingen voor je uitvoert in BluJay:
 klikken, velden invullen, toetsen indrukken, wachten — op basis van wat jij invult in de extensie.
@@ -6,8 +6,8 @@ klikken, velden invullen, toetsen indrukken, wachten — op basis van wat jij in
 ## Ingebouwde handeling: Dossiermutaties draaien
 
 1. Open BluJay.
-2. Klik op het extensie-icoon (of druk **Alt+B**). Rechts opent het **zijpaneel**; dat blijft open terwijl je werkt.
-3. Kies bij **Dossiermutaties draaien**:
+2. Klik op het extensie-icoon (**NV**, of druk **Alt+B**). Rechts opent het **zijpaneel** met het overzicht van acties.
+3. Klik op **Dossiermutaties draaien** en kies:
    - **Van periode** en **T/m periode** (maand + jaar) — standaard januari t/m december van dit jaar
    - **Klantcode** — leeg laten = alle klanten
 4. Klik **▶ Uitvoeren**. In het zijpaneel en rechtsonder in BluJay zie je bij welke stap hij is.
@@ -47,13 +47,13 @@ Daarna bevestigt hij:
 ## Ingebouwde handeling: Uitslagdossier aanmaken (vanuit paklijst-PDF)
 
 1. Open BluJay en het zijpaneel (⚡ of **Alt+B**).
-2. Sleep de **paklijst (PDF)** in het vak bij *Uitslagdossier aanmaken* (of klik erop om te kiezen).
+2. Klik op **Uitslagdossier aanmaken** en sleep de **paklijst (PDF)** in het vak (of klik erop om te kiezen).
    De klant wordt herkend (nu: **Top Brands → TOPBROUD**) en de velden worden ingevuld.
 3. Vul **laaddatum + laadtijd** en **losdatum + lostijd** in (tijd *tot* leeg = zelfde als *van*). Controleer de rest.
 4. Klik **▶ Uitvoeren**. Hij doet dan:
    Uitslag → Uitslagorders → `60WH` Tab Tab → Afh.code `u` → Opdrachtgever → Tab Tab (dossier wordt gemaakt)
    → Referentie, Laadadres, Laaddatum/-tijden, Konditie + plaats, **Laadref = nieuw dossiernummer**, Ontvanger, Losadres,
-   Losdatum/-tijden, Losref → Enter → Aantal pallets (bijv. 33 EP) → Menu → Omschrijvingen → Instructies uitslag
+   Losdatum/-tijden, Losref → Enter → Aantal pallets aanklikken (bijv. 33 EP) → Enter → Menu → Omschrijvingen → Instructies uitslag
    → "Laden in de lengte" + Enter.
 
 | Uit de paklijst (Top Brands) | Dossierveld |
@@ -69,7 +69,7 @@ Kent hij de ontvanger-code van een afnemer nog niet, dan blijft dat veld leeg (r
 daarna onthoudt hij hem voor dat klantnummer.
 
 **Echte toetsaanslagen:** deze handelingen typen zoals jij dat doet (ook Tab en Enter). De browser toont tijdens
-de handeling een balk *"BluJay Assistent is foutopsporing gestart"*. Dat is normaal en verdwijnt als hij klaar is
+de handeling een balk *"Neele-Vat BluJay Assistent is foutopsporing gestart"*. Dat is normaal en verdwijnt als hij klaar is
 (niet op *Annuleren* klikken, dan stopt hij met echte toetsaanslagen).
 
 ## Installeren (eenmalig)
@@ -79,7 +79,7 @@ de handeling een balk *"BluJay Assistent is foutopsporing gestart"*. Dat is norm
 3. Zet rechtsboven **Ontwikkelaarsmodus** aan.
 4. Klik **Uitgepakte extensie laden** en kies de map (de map waar `manifest.json` in staat).
 5. Pin de extensie vast via het puzzelstukje in de werkbalk.
-6. Klik op het icoon: rechts opent het zijpaneel van BluJay Assistent.
+6. Klik op het icoon (NV): rechts opent het zijpaneel van Neele-Vat BluJay Assistent.
 
 Na een update van de bestanden: klik op ↻ bij de extensie in `chrome://extensions` en herlaad BluJay.
 De ingebouwde handeling *Dossiermutaties draaien* wordt dan automatisch bijgewerkt naar de nieuwste versie

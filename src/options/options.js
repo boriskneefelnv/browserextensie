@@ -92,7 +92,7 @@ function move(arr, i, d) {
 function renderNav() {
   const nav = $('macroNav');
   nav.textContent = '';
-  if (!state.macros.length) nav.append(el('p', { class: 'empty' }, 'Nog geen handelingen.'));
+  if (!state.macros.length) nav.append(el('p', { class: 'empty' }, 'Nog geen acties.'));
   for (const m of state.macros) {
     nav.append(
       el('button', {
