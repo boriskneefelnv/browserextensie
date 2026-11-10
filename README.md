@@ -53,7 +53,7 @@ Daarna bevestigt hij:
    Snel typen kan: datum `11` + Tab → `11-<deze maand>-<dit jaar>`, `11-12` → `11-12-<dit jaar>`;
    tijd `8` → `08:00`, `17` → `17:00`, `830` → `08:30`.
 4. Klik **▶ Uitvoeren**. Hij doet dan:
-   Uitslag → Uitslagorders → `60WH` → Tab tot Afh.code → `u` → Tab tot Opdrachtgever → Tab Tab (dossier wordt gemaakt)
+   Uitslag → Uitslagorders → Zending `60WH` Tab Tab → Afh.code → `u` → Tab tot Opdrachtgever → Tab Tab (dossier wordt gemaakt)
    → Referentie, Laadadres, Laaddatum/-tijden, Konditie + plaats, **Laadref = nieuw dossiernummer**, Ontvanger, Losadres,
    Losdatum/-tijden, Losref → Enter → Aantal pallets aanklikken (bijv. 33 EP) → Enter → Menu → Omschrijvingen → Instructies uitslag
    → "Laden in de lengte" + Enter.

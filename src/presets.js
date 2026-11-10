@@ -69,7 +69,7 @@ const PRESETS = [
   },
   {
     id: 'uitslagdossier',
-    version: 4,
+    version: 5,
     stepDelay: 60,
     name: 'Uitslagdossier aanmaken',
     description: 'Sleep de paklijst (PDF) hierheen. De klant wordt herkend en het dossier wordt helemaal ingevuld.',
@@ -108,9 +108,11 @@ const PRESETS = [
       { type: 'wait', value: '500' },
 
       // 2. Aanmaken nieuw dossier — alles via Tab, in de volgorde van BluJay (nooit naar andere velden springen).
-      { type: 'type', selector: 'focus || field=Afdeling', value: '60WH', timeout: 20000 },
+      // Scherm "Uitslag dossiers": Zending 60WH, Tab, nogmaals Tab → scherm "Aanmaken nieuw dossier" opent.
+      { type: 'type', selector: 'focus || field=Zending', value: '60WH', timeout: 20000 },
       { type: 'key', selector: 'focus', value: 'Tab' },
-      { type: 'tabTo', selector: 'field=Afh.code', value: '4' },
+      { type: 'key', selector: 'focus', value: 'Tab' },
+      { type: 'tabTo', selector: 'field=Afh.code', value: '4', timeout: 20000 },
       { type: 'type', selector: 'field=Afh.code', value: 'u' },
       { type: 'tabTo', selector: 'field=Opdrachtgever', value: '8' },
       { type: 'type', selector: 'field=Opdrachtgever', value: '{{opdrachtgever}}' },

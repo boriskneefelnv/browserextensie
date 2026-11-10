@@ -403,7 +403,13 @@ async function runStep(ctrl, step, vars, settings, label) {
     }
     if (res.value && res.value.__real) {
       try {
-        if (step.type === 'key') await cdpKey(where.tabId, value || 'Enter');
+        if (step.type === 'key' && /^tab$/i.test(value)) {
+          // Na Tab wachten tot de cursor verplaatst is (BluJay controleert soms eerst het veld).
+          const before = await focusToken(ctrl);
+          await cdpKey(where.tabId, 'Tab');
+          const until = Date.now() + 1000;
+          while (Date.now() < until && (await focusToken(ctrl)) === before) await sleep(40);
+        } else if (step.type === 'key') await cdpKey(where.tabId, value || 'Enter');
         else if (value === '') { if (res.value.hadValue) await cdpKey(where.tabId, 'Backspace'); }
         else await cdpText(where.tabId, value);
         return;
