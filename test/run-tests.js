@@ -256,61 +256,50 @@ async function test(name, fn) {
     await panel.close();
   });
 
-  await test('Uitslagdossier aanmaken — volledige flow met echte toetsaanslagen', async () => {
+  // ------------------------------------------------------------ Uitslagdossier op het BluJay-achtige testscherm
+  const uitslagVars = {
+    laaddatum: '11-09-2026', laadtijd_van: '08:00', laadtijd_tot: '16:00', losdatum: '14-09-2026', lostijd_van: '14:00', lostijd_tot: '',
+    opdrachtgever: 'TOPBROUD', referentie: '26SO270-011129', extraref: '', laadadres: 'NEELEMAA3', konditie: 'DDP', plaats: 'Biblis',
+    ontvanger: 'ACTIOBIB', losadres: '', losref: '2031479', pallets: '33', palletsoort: 'EP', instructie: 'Laden in de lengte',
+  };
+  const runUitslag = async (hash = '') => {
     const up = await context.newPage();
-    await up.goto(`${base}/uitslag/index.html`);
-    await up.frameLocator('#side').locator('text=Inslag').waitFor();
-    await up.waitForTimeout(400);
+    await up.goto(`${base}/blujay/index.html${hash}`);
+    await up.waitForTimeout(500);
     await sw.evaluate((presets) => chrome.storage.local.set({ macros: presets, settings: { stepDelay: 30, timeout: 5000 } }), await sw.evaluate(() => PRESETS));
-    const id = await sw.evaluate(async (url) => (await chrome.tabs.query({ url }))[0].id, `${base}/uitslag/index.html`);
-    const vars = {
-      laaddatum: '2026-09-11', laadtijd_van: '08:00', laadtijd_tot: '16:00', losdatum: '2026-09-14', lostijd_van: '14:00', lostijd_tot: '',
-      opdrachtgever: 'TOPBROUD', referentie: '26SO270-011129', extraref: '', laadadres: 'NEELEMAA3', konditie: 'DDP', plaats: 'Biblis',
-      ontvanger: 'ACTIOBIB', losadres: '', losref: '2031479', pallets: '33', palletsoort: 'EP', instructie: 'Laden in de lengte',
-    };
-    const res = await sw.evaluate(({ id, vars }) => runMacro(id, 'uitslagdossier', vars, 'test'), { id, vars });
-    const main = up.frames().find((f) => f.url().endsWith('/uitslagorders.html'));
-    const v = main ? await main.evaluate(() => Object.fromEntries([...document.querySelectorAll('input')].map((i) => [i.id, i.value]))) : {};
-    const extra = main ? await main.evaluate(() => ({ status: document.getElementById('status').textContent, instr: document.getElementById('instrSaved').textContent })) : {};
-    if (!res.ok) {
-      const log = await sw.evaluate(async () => (await chrome.storage.local.get('log')).log[0]);
-      console.log('       stappenverslag:\n         ' + (log.trace || []).join('\n         '));
-    }
-    assert.ok(res.ok, res.error + ' | ' + JSON.stringify(extra));
+    const id = await sw.evaluate(async (url) => (await chrome.tabs.query({})).find((t) => t.url === url).id, `${base}/blujay/index.html${hash}`);
+    const res = await sw.evaluate(({ id, vars }) => runMacro(id, 'uitslagdossier', vars, 'test'), { id, vars: uitslagVars });
+    const model = await up.evaluate(() => ({ ...window.model }));
+    const logText = await up.textContent('#log');
+    const instr = await up.textContent('#instrSaved');
+    const trace = (await sw.evaluate(async () => (await chrome.storage.local.get('log')).log[0])).trace || [];
+    return { up, res, model, logText, instr, trace };
+  };
+
+  await test('Uitslagdossier aanmaken — BluJay-achtig scherm (div-velden, tussenvakje, Tab-volgorde)', async () => {
+    const { up, res, model, logText, instr, trace } = await runUitslag();
+    if (!res.ok) console.log('       stappenverslag:\n         ' + trace.join('\n         '));
+    assert.ok(res.ok, res.error + ' | ' + logText);
+    const m = model;
     assert.deepStrictEqual(
-      [v.afh, v.soort, v.opdr, v.ref, v.extra, v.afz, v.laadadres, v.laaddat, v.laadvan, v.laadtot, v.kond, v.kondplaats, v.laadref, v.ontv, v.losadres, v.losdat, v.losvan, v.lostot, v.losref, v.pal, v.palsoort],
-      ['u', 'd', 'TOPBROUD', '26SO270-011129', '', 'TOPBROUD', 'NEELEMAA3', '11-09-26', '08:00', '16:00', 'DDP', 'Biblis', '60123456', 'ACTIOBIB', 'ACTIOBIB', '14-09-26', '14:00', '14:00', '2031479', '33', 'EP']
+      [m.zafd, m.afh, m.soort, m.opdr, m.ref, m.extra, m.afz, m.laadadres, m.laaddat, m.laadvan, m.laadtot, m.kond, m.kondplaats, m.verv,
+        m.laadref, m.ontv, m.losadres, m.losdat, m.losvan, m.lostot, m.losref, m.pal, m.palsoort, m.stapel],
+      ['60WH', 'u', 'd', 'TOPBROUD', '26SO270-011129', '', 'TOPBROUD', 'NEELEMAA3', '11-09-26', '08:00', '16:00', 'DDP', 'Biblis', '',
+        '60123456', 'ACTIOBIB', 'ACTIOBIB', '14-09-26', '14:00', '14:00', '2031479', '33', 'EP', false]
     );
-    // Valkuilen: deze velden mogen niet aangeraakt worden
-    assert.deepStrictEqual([v.verwdat, v.verwtijd, v.vervoerder ?? v.verv], ['10-11-26', '07:59', '']);
-    assert.strictEqual(await main.evaluate(() => document.getElementById('stapel').checked), false, 'Stapelbaar is aangevinkt');
-    assert.match(extra.status, /dossier aangemaakt\]\[opgeslagen\]\[pallets opgeslagen/);
-    assert.doesNotMatch(extra.status, /zonder tab/, 'Opdrachtgever niet via Tab bereikt');
-    assert.strictEqual(await up.textContent('#rolstatus'), '', 'cursor is bij de rol-keuze gekomen');
-    assert.strictEqual(extra.instr, 'instructie: Laden in de lengte');
+    assert.deepStrictEqual([m.verwdat, m.verwtijd, m.wn], ['10-11-26', '07:59', 'BKN'], 'velden aangeraakt die niet aangeraakt mochten worden');
+    assert.match(logText, /dossier aangemaakt\]\[opgeslagen\]/);
+    assert.doesNotMatch(logText, /WAREHOUSE|ZOEKSCHERM|NIET/);
+    assert.strictEqual(instr, 'instructie: Laden in de lengte');
     await up.close();
   });
 
-  await test('Uitslagdossier — cursor springt uit het scherm: stoppen zonder te typen', async () => {
-    const up = await context.newPage();
-    await up.goto(`${base}/uitslag/index.html#valkuil`);
-    await up.frameLocator('#side').locator('text=Inslag').waitFor();
-    await up.waitForTimeout(400);
-    const id = await sw.evaluate(async (url) => (await chrome.tabs.query({})).find((t) => t.url === url).id, `${base}/uitslag/index.html#valkuil`);
-    const vars = {
-      laaddatum: '10-11-2026', laadtijd_van: '10:00', laadtijd_tot: '16:00', losdatum: '10-11-2026', lostijd_van: '08:00', lostijd_tot: '',
-      opdrachtgever: 'TOPBROUD', referentie: '26SO270-011129', extraref: '', laadadres: 'NEELEMAA3', konditie: 'DDP', plaats: 'Biblis',
-      ontvanger: 'ACTIOBIB', losadres: '', losref: '2031479', pallets: '33', palletsoort: 'EP', instructie: 'Laden in de lengte',
-    };
-    const res = await sw.evaluate(({ id, vars }) => runMacro(id, 'uitslagdossier', vars, 'test'), { id, vars });
+  await test('Uitslagdossier — cursor springt naar "Neele-Vat Warehouse": stoppen zonder te typen', async () => {
+    const { up, res, model } = await runUitslag('#valkuil');
     assert.strictEqual(res.ok, false);
-    assert.match(res.error, /uit het dossierscherm gesprongen/);
-    const main = up.frames().find((f) => f.url().endsWith('/uitslagorders.html'));
-    const v = await main.evaluate(() => Object.fromEntries([...document.querySelectorAll('input')].map((i) => [i.id, i.value])));
-    assert.strictEqual(v.laadvan, '10:00');
-    assert.deepStrictEqual([v.verwdat, v.verwtijd, v.laadtot], ['10-11-26', '07:59', '16:01'], 'er is toch iets getypt');
-    const log = await sw.evaluate(async () => (await chrome.storage.local.get('log')).log[0]);
-    assert.ok(log.trace.some((l) => /cursor:/.test(l)), 'stappenverslag ontbreekt');
+    assert.match(res.error, /Laaddatum|Konditie|cursor/);
+    assert.strictEqual(await up.inputValue('#wh'), 'Neele-Vat Warehouse 6.34', 'er is in het warehouse-vak getypt');
+    assert.deepStrictEqual([model.laadtot, model.verwdat], ['16:01', '10-11-26']);
     await up.close();
   });
 

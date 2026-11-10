@@ -82,7 +82,7 @@ chrome.tabs.onCreated.addListener(async (tab) => {
 
 /** Eén keer alle tabbladen/frames afzoeken naar één selector. */
 async function scanOnce(ctrl, selector, { frameHint, frameText, near, allowHidden, pattern }) {
-  const isFocus = /^(focus|focus-any|actief veld|cursor)$/i.test(String(selector).trim());
+  const isFocus = /^(focus|focus-any|actief veld|cursor)$|^focus:/i.test(String(selector).trim());
   // Nieuwste tabblad (bijv. een net geopend venster) eerst.
   for (const tabId of [...ctrl.tabs].reverse()) {
     let frames = [];
@@ -331,16 +331,92 @@ async function describeFocus(ctrl) {
   return d?.text || '(onbekend)';
 }
 
+/** Wacht tot de cursor (na een Tab) in een ander, echt veld staat — niet in een tussenvakje. */
+async function waitFocusMoved(ctrl, before, ms = 2500) {
+  const until = Date.now() + ms;
+  for (;;) {
+    const t = await focusToken(ctrl);
+    if (t !== before && !/:(tussen|geen)$/.test(t) && t !== 'geen') return t;
+    if (Date.now() > until || ctrl.stopped) return null;
+    await sleep(30);
+  }
+}
+
+/** Wacht tot er een echt veld de cursor heeft (bijv. direct na het laden van een scherm). */
+async function waitRealFocus(ctrl, ms = 5000) {
+  const until = Date.now() + ms;
+  for (;;) {
+    const f = await scanOnce(ctrl, 'focus-any', {});
+    if (f) return f;
+    if (Date.now() > until || ctrl.stopped) return null;
+    await sleep(50);
+  }
+}
+
 /** Unieke aanduiding van het element met de cursor (om te zien of Tab de cursor verplaatst heeft). */
 async function focusToken(ctrl) {
-  const f = await scanOnce(ctrl, 'focus-any', {});
-  if (!f) return 'geen';
-  const r = await sendToFrame(f.tabId, f.frameId, { type: 'focusToken' });
-  return `${f.tabId}:${f.frameId}:${r?.token ?? '?'}`;
+  // Ook tussenvakjes meetellen, zodat we zien dat de cursor onderweg is.
+  for (const tabId of [...ctrl.tabs].reverse()) {
+    let frames = [];
+    try { frames = (await chrome.webNavigation.getAllFrames({ tabId })) || []; } catch { /* tab weg */ }
+    const res = await Promise.all(frames.map((fr) => sendToFrame(tabId, fr.frameId, { type: 'probe', selector: 'focus-any' })));
+    let best = null;
+    let bestAt = -1;
+    res.forEach((r, i) => { if (r && r.found && (r.focusAt || 0) > bestAt) { bestAt = r.focusAt || 0; best = frames[i]; } });
+    if (best) {
+      const r = await sendToFrame(tabId, best.frameId, { type: 'focusToken' });
+      return `${tabId}:${best.frameId}:${r?.token ?? '?'}`;
+    }
+    // geen echt veld: is de cursor in een tussenvakje?
+    const toks = await Promise.all(frames.map((fr) => sendToFrame(tabId, fr.frameId, { type: 'focusToken' })));
+    if (toks.some((t) => t?.token === 'tussen')) return `${tabId}:?:tussen`;
+  }
+  return 'geen';
+}
+
+/**
+ * Tab tot het actieve veld het gevraagde label heeft (selector "focus:Referentie").
+ * Zo volgt hij de Tab-volgorde van BluJay en controleert hij bij elk veld waar hij is.
+ */
+async function tabToLabel(ctrl, selector, max, timeout, waitScreen = false) {
+  const wanted = selector.slice(6);
+  const seen = [];
+  ctrl.waitedForScreen = false;
+  for (let i = 0; ; i++) {
+    if (ctrl.stopped) throw new Error('gestopt door gebruiker');
+    const f = await waitRealFocus(ctrl, i === 0 ? timeout : 3000);
+    if (!f) throw new Error(`er staat geen cursor in een veld (gezocht: "${wanted}")`);
+    const r = await sendToFrame(f.tabId, f.frameId, { type: 'isFocused', selector });
+    if (r && r.focused) return;
+    if (waitScreen && i === 0 && !ctrl.waitedForScreen) {
+      // Misschien is BluJay nog bezig (nieuw scherm): eerst even kijken of de cursor vanzelf verplaatst.
+      ctrl.waitedForScreen = true;
+      const tok = await focusToken(ctrl);
+      if (await waitFocusMoved(ctrl, tok, 1500)) { i = -1; continue; }
+    }
+    ctrl.waitedForScreen = false;
+    const d = await sendToFrame(f.tabId, f.frameId, { type: 'describeFocus' });
+    seen.push(d?.text || '?');
+    if (/zoek op/i.test(d?.text || '')) throw new Error(`BluJay heeft een zoekscherm geopend (${d.text}) — een ingevulde code is waarschijnlijk onbekend`);
+    if (i >= max) {
+      throw new Error(max === 0
+        ? `de cursor staat niet in het verwachte veld (verwacht: naast "${wanted}", staat bij: ${seen[0]}) — gestopt zonder te typen`
+        : `na ${max}× Tab niet bij "${wanted}" gekomen. Langs geweest: ${seen.join(' → ')}`);
+    }
+    const before = await focusToken(ctrl);
+    if (ctrl.realKeys && (await cdpAttach(ctrl, f.tabId))) await cdpKey(f.tabId, 'Tab');
+    else await sendToFrame(f.tabId, f.frameId, { type: 'exec', step: { type: 'key', selector: 'focus-any', value: 'Tab' } });
+    await waitFocusMoved(ctrl, before, 2500);
+  }
 }
 
 /** Druk Tab tot de cursor in het gevraagde veld staat (volgt de tab-volgorde van BluJay). */
 async function tabTo(ctrl, step, selector, fill, timeout, label) {
+  if (selector.startsWith('focus:')) {
+    const v = String(fill(step.value ?? '')).trim();
+    // waarde 0 = alleen controleren (geen Tab geven)
+    return tabToLabel(ctrl, selector, v === '' ? 10 : Number(v) || 0, timeout, !!step.waitScreen);
+  }
   const max = Number(fill(step.value)) || 10;
   const target = await locate(ctrl, selector, { frameHint: step.frame, near: fill(step.near || ''), timeout, label });
   if (!target) throw new Error(`veld niet gevonden: ${selector}`);
@@ -454,8 +530,7 @@ async function runStep(ctrl, step, vars, settings, label) {
           // Na Tab wachten tot de cursor verplaatst is (BluJay controleert soms eerst het veld).
           const before = await focusToken(ctrl);
           await cdpKey(where.tabId, 'Tab');
-          const until = Date.now() + 1000;
-          while (Date.now() < until && (await focusToken(ctrl)) === before) await sleep(40);
+          await waitFocusMoved(ctrl, before, 2500);
         } else if (step.type === 'key') await cdpKey(where.tabId, value || 'Enter');
         else if (value === '') { if (res.value.hadValue) await cdpKey(where.tabId, 'Backspace'); }
         else {

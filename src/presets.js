@@ -69,7 +69,7 @@ const PRESETS = [
   },
   {
     id: 'uitslagdossier',
-    version: 7,
+    version: 8,
     stepDelay: 60,
     name: 'Uitslagdossier aanmaken',
     description: 'Sleep de paklijst (PDF) hierheen. De klant wordt herkend en het dossier wordt helemaal ingevuld.',
@@ -105,79 +105,75 @@ const PRESETS = [
       // 1. Uitslag → Uitslagorders (Uitslag alleen openklappen als hij nog dicht is)
       { type: 'click', selector: 'text=Uitslag', when: '!bestaat: text=Uitslagorders' },
       { type: 'click', selector: 'text=Uitslagorders' },
-      { type: 'wait', value: '500' },
 
-      // 2. Aanmaken nieuw dossier — alles via Tab, in de volgorde van BluJay (nooit naar andere velden springen).
-      // Scherm "Uitslag dossiers": Zending 60WH, Tab, nogmaals Tab → scherm "Aanmaken nieuw dossier" opent.
-      { type: 'type', selector: 'focus || field=Zending', value: '60WH', timeout: 20000 },
+      // 2. Scherm "Uitslag dossiers": op het Zending-vakje klikken, 60WH, Tab, Tab → "Aanmaken nieuw dossier"
+      { type: 'click', selector: 'box=Zending', timeout: 20000 },
+      { type: 'type', selector: 'focus', value: '60WH' },
       { type: 'key', selector: 'focus', value: 'Tab' },
       { type: 'key', selector: 'focus', value: 'Tab' },
-      { type: 'tabTo', selector: 'field=Afh.code', value: '4', timeout: 20000 },
-      { type: 'type', selector: 'field=Afh.code', value: 'u' },
-      { type: 'tabTo', selector: 'field=Opdrachtgever', value: '8' },
-      { type: 'type', selector: 'field=Opdrachtgever', value: '{{opdrachtgever}}' },
-      { type: 'key', selector: 'focus', value: 'Tab' },
+
+      // 3. Aanmaken nieuw dossier: Afh.code u → (Soort blijft d) → Opdrachtgever → Tab (Sjabloon) → Tab = dossier maken
+      { type: 'tabTo', selector: 'focus:Afh.code', value: '3', timeout: 20000, waitScreen: true },
+      { type: 'type', selector: 'focus', value: 'u' },
+      { type: 'tabTo', selector: 'focus:Opdrachtgever', value: '4' },
+      { type: 'type', selector: 'focus', value: '{{opdrachtgever}}' },
+      { type: 'tabTo', selector: 'focus:Sjabloon', value: '2' },
       { type: 'key', selector: 'focus', value: 'Tab' },
       { type: 'read', selector: 'contains=Dossiernummer', pattern: 'Dossiernummer\\D*(\\d{6,})', variable: 'dossiernr', timeout: 20000 },
       { type: 'notify', value: 'Dossier {{dossiernr}} aangemaakt — gegevens invullen…' },
 
-      // 3. Kop van het dossier: ALLEEN Tab en typen, precies in de volgorde van BluJay (cursor start in Opdrachtgever).
-      // → Referentie
+      // 4. Dossier: alles in één Tab-reeks (cursor start in Opdrachtgever). Bij elk veld wordt het label gecontroleerd.
+      { type: 'tabTo', selector: 'focus:Referentie', value: '3', timeout: 20000, waitScreen: true },
+      { type: 'type', selector: 'focus', value: '{{referentie}}' },
+      { type: 'tabTo', selector: 'focus:Extra ref.', value: '2', when: '{{extraref}} != ' },
+      { type: 'type', selector: 'focus', value: '{{extraref}}', when: '{{extraref}} != ' },
+      { type: 'tabTo', selector: 'focus:Laadadres', value: '4' },
+      { type: 'type', selector: 'focus', value: '{{laadadres}}', when: '{{laadadres}} != ' },
+      { type: 'tabTo', selector: 'focus:Laaddatum', value: '2' },
+      { type: 'type', selector: 'focus', value: '{{laaddatum|DD-MM-JJ}}' },
+      // begintijd: links ervan staat de datum; eindtijd: links ervan staat de begintijd (zo controleren we waar we zijn)
       { type: 'key', selector: 'focus', value: 'Tab' },
-      { type: 'type', selector: 'focus', value: '{{referentie}}', stayInFrame: true },
-      // → Extra ref.
-      { type: 'key', selector: 'focus', value: 'Tab', stayInFrame: true },
-      { type: 'type', selector: 'focus', value: '{{extraref}}', when: '{{extraref}} != ', stayInFrame: true },
-      // → Afzender (neemt opdrachtgever over) → Laadadres
-      { type: 'key', selector: 'focus', value: 'Tab', stayInFrame: true },
-      { type: 'key', selector: 'focus', value: 'Tab', stayInFrame: true },
-      { type: 'type', selector: 'focus', value: '{{laadadres}}', when: '{{laadadres}} != ', stayInFrame: true },
-      // → Laaddatum, begintijd, eindtijd
-      { type: 'key', selector: 'focus', value: 'Tab', stayInFrame: true },
-      { type: 'type', selector: 'focus', value: '{{laaddatum|DD-MM-JJ}}', stayInFrame: true },
-      { type: 'key', selector: 'focus', value: 'Tab', stayInFrame: true },
-      { type: 'type', selector: 'focus', value: '{{laadtijd_van}}', stayInFrame: true },
-      { type: 'key', selector: 'focus', value: 'Tab', stayInFrame: true },
-      { type: 'type', selector: 'focus', value: '{{laadtijd_tot}}', stayInFrame: true },
-      // → Konditie (+ plaats; zonder konditie slaat BluJay de plaats over)
-      { type: 'key', selector: 'focus', value: 'Tab', stayInFrame: true },
-      { type: 'type', selector: 'focus', value: '{{konditie}}', when: '{{konditie}} != ', stayInFrame: true },
-      { type: 'key', selector: 'focus', value: 'Tab', when: '{{konditie}} != ', stayInFrame: true },
-      { type: 'type', selector: 'focus', value: '{{plaats}}', when: '{{konditie}} != ', stayInFrame: true },
-      // → Vervoerder → Laadref (= nieuw dossiernummer)
-      { type: 'key', selector: 'focus', value: 'Tab', stayInFrame: true },
-      { type: 'key', selector: 'focus', value: 'Tab', stayInFrame: true },
-      { type: 'type', selector: 'focus', value: '{{dossiernr}}', stayInFrame: true },
-      // → Ontvanger → Losadres
-      { type: 'key', selector: 'focus', value: 'Tab', stayInFrame: true },
-      { type: 'type', selector: 'focus', value: '{{ontvanger}}', stayInFrame: true },
-      { type: 'key', selector: 'focus', value: 'Tab', stayInFrame: true },
-      { type: 'type', selector: 'focus', value: '{{losadres}}', stayInFrame: true },
-      // → Losdatum, begintijd, eindtijd
-      { type: 'key', selector: 'focus', value: 'Tab', stayInFrame: true },
-      { type: 'type', selector: 'focus', value: '{{losdatum|DD-MM-JJ}}', stayInFrame: true },
-      { type: 'key', selector: 'focus', value: 'Tab', stayInFrame: true },
-      { type: 'type', selector: 'focus', value: '{{lostijd_van}}', stayInFrame: true },
-      { type: 'key', selector: 'focus', value: 'Tab', stayInFrame: true },
-      { type: 'type', selector: 'focus', value: '{{lostijd_tot}}', stayInFrame: true },
-      // → Losref, daarna Enter = dossier opslaan
-      { type: 'key', selector: 'focus', value: 'Tab', stayInFrame: true },
-      { type: 'type', selector: 'focus', value: '{{losref}}', when: '{{losref}} != ', stayInFrame: true },
-      { type: 'key', selector: 'focus', value: 'Enter', stayInFrame: true },
+      { type: 'tabTo', selector: 'focus:{{laaddatum|DD-MM-JJ}}', value: '0' },
+      { type: 'type', selector: 'focus', value: '{{laadtijd_van}}' },
+      { type: 'key', selector: 'focus', value: 'Tab' },
+      { type: 'tabTo', selector: 'focus:{{laadtijd_van}}', value: '0' },
+      { type: 'type', selector: 'focus', value: '{{laadtijd_tot}}' },
+      { type: 'tabTo', selector: 'focus:Konditie', value: '2' },
+      { type: 'type', selector: 'focus', value: '{{konditie}}', when: '{{konditie}} != ' },
+      { type: 'key', selector: 'focus', value: 'Tab', when: '{{konditie}} != ' },
+      { type: 'tabTo', selector: 'focus:{{konditie}}', value: '0', when: '{{konditie}} != ' },
+      { type: 'type', selector: 'focus', value: '{{plaats}}', when: '{{konditie}} != ' },
+      { type: 'tabTo', selector: 'focus:Laadref', value: '4' },
+      { type: 'type', selector: 'focus', value: '{{dossiernr}}' },
+      { type: 'tabTo', selector: 'focus:Ontvanger', value: '2' },
+      { type: 'type', selector: 'focus', value: '{{ontvanger}}' },
+      { type: 'tabTo', selector: 'focus:Losadres', value: '2' },
+      { type: 'type', selector: 'focus', value: '{{losadres}}' },
+      { type: 'tabTo', selector: 'focus:Losdatum', value: '2' },
+      { type: 'type', selector: 'focus', value: '{{losdatum|DD-MM-JJ}}' },
+      { type: 'key', selector: 'focus', value: 'Tab' },
+      { type: 'tabTo', selector: 'focus:{{losdatum|DD-MM-JJ}}', value: '0' },
+      { type: 'type', selector: 'focus', value: '{{lostijd_van}}' },
+      { type: 'key', selector: 'focus', value: 'Tab' },
+      { type: 'tabTo', selector: 'focus:{{lostijd_van}}', value: '0' },
+      { type: 'type', selector: 'focus', value: '{{lostijd_tot}}' },
+      { type: 'tabTo', selector: 'focus:Losref', value: '2' },
+      { type: 'type', selector: 'focus', value: '{{losref}}', when: '{{losref}} != ' },
+      // → EDI ERROR overwrite → Volumewaarde (2 vakjes) → Aantal Pallets (+ soort)
+      { type: 'tabTo', selector: 'focus:Aantal Pallets', value: '6' },
+      { type: 'type', selector: 'focus', value: '{{pallets}}', when: '{{pallets}} != ' },
+      { type: 'key', selector: 'focus', value: 'Tab' },
+      { type: 'tabTo', selector: 'focus:{{pallets}}', value: '0', when: '{{pallets}} != ' },
+      { type: 'type', selector: 'focus', value: '{{palletsoort}}', when: '{{pallets}} != ' },
+      // → Aantal stuwpalle → Stapelbaar: moet UIT staan
+      { type: 'tabTo', selector: 'focus:Stapelbaar', value: '3' },
+      { type: 'check', selector: 'focus-any', value: 'uit' },
+      // → Verwachte datum, daar Enter = dossier opslaan
+      { type: 'tabTo', selector: 'focus:Verwachte datum', value: '2' },
+      { type: 'key', selector: 'focus', value: 'Enter' },
       { type: 'wait', value: '1500' },
 
-      // 5. Stapelbaar mag niet aangevinkt zijn (pas ná de Tab-reeks, omdat de muis de Tab-volgorde kan veranderen).
-      { type: 'check', selector: 'field=Stapelbaar', value: 'uit', optional: true, timeout: 3000 },
-
-      // 6. Aantal pallets (bijv. 33 EP): na de Enter moet je eerst weer een veld aanklikken; na afloop Enter.
-      { type: 'click', selector: 'field=Aantal Pallets', when: '{{pallets}} != ' },
-      { type: 'type', selector: 'field=Aantal Pallets', value: '{{pallets}}', when: '{{pallets}} != ' },
-      { type: 'key', selector: 'focus', value: 'Tab', when: '{{pallets}} != ' },
-      { type: 'type', selector: 'field=Aantal Pallets [2]', value: '{{palletsoort}}', when: '{{pallets}} != ' },
-      { type: 'key', selector: 'focus', value: 'Enter', when: '{{pallets}} != ' },
-      { type: 'wait', value: '1000', when: '{{pallets}} != ' },
-
-      // 7. Menu → Omschrijvingen → Instructies uitslag → tekst + Enter
+      // 5. Menu (in de werkbalk, naast Artikelregels) → Omschrijvingen → Instructies uitslag → tekst + Enter
       { type: 'click', selector: 'text=Menu', near: 'Artikelregels', when: '{{instructie}} != ' },
       { type: 'click', selector: 'text=Omschrijvingen', when: '{{instructie}} != ' },
       { type: 'click', selector: 'text=Instructies uitslag', when: '{{instructie}} != ' },

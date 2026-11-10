@@ -105,10 +105,14 @@ De ingebouwde handeling *Dossiermutaties draaien* wordt dan automatisch bijgewer
 - BluJay traag? Verhoog bij ⚙ → *Instellingen* de wachttijd en time-out, of de *Wacht*-stap na *Menu* (nu 1,5 s).
 - Neemt BluJay een ingevulde waarde niet over? Zet bij die stap (⋯) **Letter voor letter typen** aan.
 
-In het dossier gebruikt hij **alleen Tab en typen**, in de vaste volgorde van BluJay (Opdrachtgever → Referentie →
-Extra ref. → Afzender → Laadadres → Laaddatum/van/tot → Konditie(/plaats) → Vervoerder → Laadref → Ontvanger → Losadres
-→ Losdatum/van/tot → Losref → Enter). Springt de cursor uit het dossierscherm, dan stopt hij zonder te typen.
-Na elk veld controleert hij of de waarde er goed in staat.
+Hoe hij werkt (gebaseerd op een nauwkeurige opname van BluJay): velden in BluJay zijn pas een invoerveld als de cursor
+erin staat, en na elke Tab staat de cursor eerst kort in een onzichtbaar vakje. De extensie wacht daarom na elke Tab tot
+de cursor in een echt veld staat en controleert aan het **label links van het veld** of hij op de goede plek is
+(bij tijdvakken: de waarde van het vakje ervoor). Klopt het niet, dan stopt hij zonder te typen.
+Volgorde: Zending (aanklikken) `60WH` Tab Tab → Afh.code `u` → Soort → Opdrachtgever → Sjabloon → Tab (dossier) →
+Referentie → Extra ref. → Afzender → Laadadres → Laaddatum/van/tot → Konditie/plaats → Vervoerder → Laadref → Ontvanger →
+Losadres → Losdatum/van/tot → Losref → EDI → Volumewaarde → Aantal Pallets/soort → stuwpallets → Stapelbaar (uit) →
+Verwachte datum → Enter.
 
 **Nauwkeurige opname (voor analyse):** *Extra → Nauwkeurige opname*. Werk daarna gewoon in BluJay; elke toets, klik,
 cursorverplaatsing (met het label van het veld), waardewijziging en elk geladen scherm wordt vastgelegd, ook

@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Neele-Vat / Uitslag dossiers (testscherm)</title>
+<!--
+  Testscherm dat het gedrag van BluJay nabootst, zoals vastgelegd in een nauwkeurige opname:
+  - alles in één document (geen frames)
+  - velden zijn <div>-vakjes; alleen het actieve veld is een <input> (één editor die verplaatst wordt)
+  - na elke Tab/klik staat de cursor eerst ~40 ms in een onzichtbaar 1x1-tekstvak
+  - Tab-volgorde exact zoals opgenomen (Werknemer wordt overgeslagen, enz.)
+-->
+<style>
+  body { margin: 0; font: 11px Verdana, sans-serif; }
+  #wh { position: absolute; left: 13px; top: 11px; width: 160px; }
+  #tv { position: absolute; left: 204px; top: 67px; width: 1px; height: 1px; border: 0; padding: 0; resize: none; }
+  #side { position: absolute; left: 0; top: 45px; width: 180px; }
+  #side .h { background: #1f5c97; color: #fff; padding: 4px 8px; margin: 2px 0; cursor: pointer; }
+  #side .i { padding: 4px 18px; cursor: pointer; }
+  #kop { position: absolute; left: 207px; top: 41px; background: #1f5c97; color: #fff; padding: 3px 30px; }
+  #bar { position: absolute; left: 330px; top: 66px; display: none; }
+  #bar td { padding: 2px 8px; cursor: pointer; }
+  .lab { position: absolute; }
+  .box { position: absolute; height: 13px; border: 1px solid #889; background: #fff; overflow: hidden; white-space: nowrap; cursor: text; }
+  .ro { background: #e8e8e8; }
+  #ed { position: absolute; height: 13px; padding: 0 1px; border: 1px solid #36c; font: 11px Verdana; box-sizing: border-box; }
+  .menu { position: absolute; background: #fff; border: 1px solid #999; display: none; }
+  .menu div { padding: 3px 12px; cursor: pointer; white-space: nowrap; }
+  #popup, #zoek { position: absolute; left: 900px; top: 170px; width: 320px; border: 2px solid #1f5c97; background: #fff; display: none; padding: 6px; }
+</style>
+</head>
+<body>
+<input id="wh" name="VAR:1_1,1" value="Neele-Vat Warehouse 6.34">
+<textarea id="tv" title="tussenvoegen"></textarea>
+<div id="side">
+  <div class="h">Inslag</div>
+  <div class="h" id="uitslagKop">Uitslag</div>
+  <div id="uitslagItems" style="display:none">
+    <div class="i" id="uitslagorders"><span>Uitslagorders</span></div>
+    <div class="i"><span>Openstaande dossiers</span></div>
+  </div>
+  <div class="h">Afhandeling Henkel</div>
+  <div class="i"><span>Planning overzicht</span></div>
+  <div class="i" style="margin-top:300px"><span>Menu</span></div>
+</div>
+<div id="kop">Home</div>
+<table id="bar"><tr><td>Wijzig</td><td>Cancel</td><td id="menuBtn">Menu</td><td>Artikelregels</td><td>Goederenregels</td><td>Dossiermutaties</td></tr></table>
+<div id="velden"></div>
+<div class="menu" id="menu" style="left:400px;top:85px">
+  <div>Artikelregels</div><div id="omschr">Omschrijvingen</div><div>Documenten</div>
+</div>
+<div class="menu" id="sub" style="left:520px;top:110px">
+  <div>Instructies overig</div><div id="instrItem">Instructies uitslag</div><div>Opmerkingen</div>
+</div>
+<div id="popup"><b>Instructies uitslag</b><br><input id="instr" style="width:300px"><div id="instrSaved"></div></div>
+<div id="zoek"><b>Zoek op adressen</b><br><input id="zoekInput" style="width:300px"></div>
+<pre id="log" style="position:absolute;left:220px;top:640px"></pre>
+<script>
+const $ = (id) => document.getElementById(id);
+const log = (t) => { $('log').textContent += '[' + t + ']'; };
+const valkuil = location.hash === '#valkuil';
+let nr = 1;
+
+// ---------------------------------------------------------------- schermen
+// veld: [id, label|null, x, y, breedte, standaardwaarde, opties]
+const SCHERMEN = {
+  zending: {
+    kop: 'Uitslag dossiers',
+    velden: [['zafd', 'Zending', 307, 99, 32, ''], ['znr', null, 349, 99, 94, '0']],
+    volgorde: ['zafd', 'znr'],
+  },
+  nieuw: {
+    kop: 'Aanmaken nieuw dossier',
+    velden: [
+      ['ingevoerd', 'Ingevoerd', 367, 116, 60, '10-11-26', { ro: true }],
+      ['afdtoon', 'Afdeling', 367, 125 + 9, 40, '60WH', { ro: true }],
+      ['afh', 'Afh.code', 367, 151, 10, 'Q'],
+      ['wn', 'Werknemer', 367, 168, 40, 'BKN'],
+      ['soort', 'Soort', 367, 186, 8, 'd'],
+      ['mafd', 'Master afdeling', 367, 203, 30, '', { ro: true }],
+      ['mdos', 'Master dossiernummer', 367, 220, 100, '0', { ro: true }],
+      ['opdr', 'Opdrachtgever', 367, 238, 135, ''],
+      ['sjab', 'Sjabloon', 367, 255, 200, ''],
+    ],
+    volgorde: ['afh', 'soort', 'opdr', 'sjab'],
+  },
+  dossier: {
+    kop: 'Dossiernummer 60123456',
+    velden: [
+      ['d_opdr', 'Opdrachtgever', 316, 134, 71, 'TOPBROUD'],
+      ['afz', 'Afzender', 316, 151, 138, 'TOPBROUD'],
+      ['laadadres', 'Laadadres', 316, 168, 138, 'TOPBROUD'],
+      ['laaddat', 'Laaddatum', 316, 186, 58, '10-11-26'],
+      ['laadvan', null, 383, 186, 30, '07:59'],
+      ['laadtot', null, 425, 186, 32, '16:01'],
+      ['kond', 'Konditie', 316, 203, 24, ''],
+      ['kondplaats', null, 358, 203, 100, ''],
+      ['verv', 'Vervoerder', 316, 220, 141, ''],
+      ['laadref', 'Laadref', 297, 342, 205, ''],
+      ['ref', 'Referentie', 592, 134, 196, '', { verplicht: true }],
+      ['extra', 'Extra ref.', 592, 151, 189, ''],
+      ['ontv', 'Ontvanger', 595, 168, 130, 'TOPBROUD'],
+      ['losadres', 'Losadres', 595, 186, 130, 'TOPBROUD'],
+      ['losdat', 'Losdatum', 595, 203, 52, '10-11-26'],
+      ['losvan', null, 655, 203, 30, ''],
+      ['lostot', null, 696, 203, 33, ''],
+      ['losref', 'Losref', 588, 342, 200, ''],
+      ['edi', 'EDI ERROR overwrite', 940, 238, 7, 'N'],
+      ['vol1', 'Volumewaarde', 915, 307, 11, ''],
+      ['vol2', null, 969, 307, 59, '0,000'],
+      ['pal', 'Aantal Pallets', 915, 324, 46, '0'],
+      ['palsoort', null, 969, 324, 53, ''],
+      ['stuw', 'Aantal stuwpalle', 915, 342, 75, '0'],
+      ['stapel', 'Stapelbaar', 915, 359, 13, true, { checkbox: true }],
+      ['verwdat', 'Verwachte datum', 335, 498, 53, '10-11-26'],
+      ['verwtijd', null, 418, 498, 33, '07:59'],
+      ['overloods', 'Over loods', 915, 394, 11, 'N'],
+    ],
+    volgorde: ['d_opdr', 'ref', 'extra', 'afz', 'laadadres', 'laaddat', 'laadvan', 'laadtot', 'kond', 'kondplaats', 'verv', 'laadref',
+      'ontv', 'losadres', 'losdat', 'losvan', 'lostot', 'losref', 'edi', 'vol1', 'vol2', 'pal', 'palsoort', 'stuw', 'stapel',
+      'verwdat', 'verwtijd', 'overloods'],
+  },
+};
+
+let scherm = null;
+const model = {}; // id -> waarde
+window.model = model;
+let actief = null; // id van het actieve veld
+let ed = null;
+
+function render(naam) {
+  scherm = SCHERMEN[naam];
+  $('kop').textContent = scherm.kop;
+  $('bar').style.display = naam === 'dossier' ? 'table' : 'none';
+  const v = $('velden');
+  v.textContent = '';
+  for (const [id, label, x, y, w, def, opt = {}] of scherm.velden) {
+    if (!(id in model)) model[id] = def;
+    if (label) {
+      const l = document.createElement('div');
+      l.className = 'lab';
+      l.textContent = label;
+      l.style.cssText = `left:${x - 99}px;top:${y}px`;
+      v.append(l);
+    }
+    if (opt.checkbox) {
+      const c = document.createElement('input');
+      c.type = 'checkbox';
+      c.id = id;
+      c.checked = !!model[id];
+      c.style.cssText = `position:absolute;left:${x}px;top:${y - 3}px;margin:0`;
+      c.addEventListener('change', () => { model[id] = c.checked; });
+      c.addEventListener('keydown', (e) => { if (e.key === 'Tab') { e.preventDefault(); volgende(id); } else if (e.key === 'Enter') opslaan(); });
+      v.append(c);
+      continue;
+    }
+    const b = document.createElement('div');
+    b.className = 'box' + (opt.ro ? ' ro' : '');
+    b.dataset.id = id;
+    b.textContent = model[id];
+    b.style.cssText = `left:${x}px;top:${y}px;width:${w}px`;
+    if (!opt.ro) b.addEventListener('mousedown', (e) => { e.preventDefault(); activeer(id); });
+    v.append(b);
+  }
+}
+
+const veld = (id) => scherm.velden.find((f) => f[0] === id);
+const box = (id) => document.querySelector(`.box[data-id="${id}"]`);
+
+/** Veld actief maken: eerst even het tussenvakje, dan de editor op de plek van het vakje. */
+function activeer(id) {
+  sluitEditor();
+  $('tv').focus();
+  setTimeout(() => {
+    actief = id;
+    const f = veld(id);
+    if (f[6] && f[6].checkbox) { $(id).focus(); return; }
+    const b = box(id);
+    ed = document.createElement('input');
+    ed.id = 'ed';
+    ed.name = 'VAR:' + Date.now() + '_' + nr++ + ',1';
+    ed.value = model[id];
+    ed.style.cssText = `left:${b.offsetLeft}px;top:${b.offsetTop}px;width:${Math.max(b.offsetWidth, 12)}px`;
+    b.style.visibility = 'hidden';
+    ed.addEventListener('keydown', toets);
+    $('velden').append(ed);
+    ed.focus();
+    ed.select();
+  }, 40);
+}
+
+function sluitEditor() {
+  if (!ed) return;
+  model[actief] = ed.value;
+  const b = box(actief);
+  if (b) { b.textContent = ed.value; b.style.visibility = ''; }
+  ed.remove();
+  ed = null;
+}
+
+function volgende(id) {
+  const vg = scherm.volgorde;
+  let i = vg.indexOf(id) + 1;
+  // Zonder konditie slaat BluJay de plaats over
+  if (vg[i] === 'kondplaats' && !model.kond) i++;
+  if (valkuil && id === 'laadvan') { sluitEditor(); $('wh').focus(); return; }
+  if (i >= vg.length) { sluitEditor(); $('tv').focus(); return; }
+  activeer(vg[i]);
+}
+
+function toets(e) {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const id = actief;
+    model[id] = ed.value;
+    const f = veld(id);
+    if (f[6] && f[6].verplicht && !ed.value) return; // verplicht veld: cursor blijft staan
+    // Overgangen tussen schermen
+    if (scherm === SCHERMEN.zending && id === 'znr') {
+      if (String(model.zafd).toUpperCase() !== '60WH') return;
+      sluitEditor();
+      $('tv').focus();
+      setTimeout(() => { render('nieuw'); activeer('afh'); }, 300);
+      return;
+    }
+    if (scherm === SCHERMEN.nieuw && id === 'sjab') {
+      if (model.opdr !== 'TOPBROUD' || String(model.afh).toLowerCase() !== 'u') { log('dossier NIET aangemaakt'); return; }
+      sluitEditor();
+      $('tv').focus();
+      setTimeout(() => { log('dossier aangemaakt'); render('dossier'); activeer('d_opdr'); }, 600);
+      return;
+    }
+    if (scherm === SCHERMEN.dossier && id === 'verv' && ed.value && ed.value !== 'DHL') {
+      sluitEditor();
+      $('zoek').style.display = 'block';
+      $('zoekInput').focus();
+      return;
+    }
+    volgende(id);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    opslaan();
+  }
+}
+
+function opslaan() {
+  if (scherm !== SCHERMEN.dossier) return;
+  sluitEditor();
+  $('tv').focus();
+  log('opgeslagen');
+}
+
+// ---------------------------------------------------------------- zijbalk, menu, valkuilen
+$('uitslagKop').addEventListener('click', () => {
+  const u = $('uitslagItems');
+  u.style.display = u.style.display === 'none' ? 'block' : 'none';
+});
+$('uitslagorders').addEventListener('click', () => { for (const k of Object.keys(model)) delete model[k]; render('zending'); $('tv').focus(); });
+$('wh').addEventListener('focus', () => log('WAREHOUSE-VAK GEFOCUST'));
+$('zoekInput').addEventListener('focus', () => log('ZOEKSCHERM'));
+$('menuBtn').addEventListener('click', () => { $('menu').style.display = 'block'; });
+$('omschr').addEventListener('mouseover', () => { $('sub').style.display = 'block'; });
+$('instrItem').addEventListener('click', () => {
+  $('menu').style.display = 'none';
+  $('sub').style.display = 'none';
+  $('popup').style.display = 'block';
+  $('tv').focus();
+  setTimeout(() => $('instr').focus(), 200);
+});
+$('instr').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('instrSaved').textContent = 'instructie: ' + $('instr').value; });
+$('tv').focus();
+</script>
+</body>
+</html>

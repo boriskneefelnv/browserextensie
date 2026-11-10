@@ -211,17 +211,64 @@
   document.addEventListener('focusin', () => { lastFocusAt = Date.now(); }, true);
 
   /** Element met de cursor, ook als het een alleen-lezen veld of knop is. */
+  /**
+   * BluJay zet de cursor na elke Tab heel even in een onzichtbaar vakje (1x1 pixel) voordat het volgende
+   * veld actief wordt. Zulke "tussenvakjes" tellen niet als veld.
+   */
+  function isTiny(el) {
+    const r = el.getBoundingClientRect();
+    return r.width < 4 || r.height < 4;
+  }
+
   function findFocusedAny() {
     const el = document.activeElement;
-    if (!el || el === document.body || el === document.documentElement || /^(IFRAME|FRAME)$/.test(el.tagName)) return [];
+    if (!el || el === document.body || el === document.documentElement || /^(IFRAME|FRAME)$/.test(el.tagName) || isTiny(el)) return [];
     return [el];
   }
 
   /** Het veld waar de cursor nu staat (in dit frame). */
   function findFocused() {
     const el = document.activeElement;
-    if (!el || !el.matches(EDITABLE)) return [];
+    if (!el || !el.matches(EDITABLE) || isTiny(el)) return [];
     return [el];
+  }
+
+  const alnum = (s) => norm(s).toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+
+  /** focus:Referentie → het actieve veld, maar alleen als het label links ervan "Referentie" is. */
+  function findFocusedWithLabel(text) {
+    const [el] = findFocusedAny();
+    if (!el) return [];
+    return alnum(labelFor(el)) === alnum(text) ? [el] : [];
+  }
+
+  /**
+   * box=Zending → het vakje rechts naast het label (ook als het geen invoerveld is, zoals in BluJay
+   * waar een veld pas een invoerveld wordt als je erop klikt). box=Laaddatum [2] → het 2e vakje.
+   */
+  function findBoxes(text) {
+    let nth = 1;
+    const m = text.match(/^(.*?)\s*\[(\d+)\]\s*$/);
+    if (m) { text = m[1]; nth = Math.max(1, Number(m[2])); }
+    const wanted = core(text);
+    const wantedLower = norm(text).toLowerCase().replace(/[:*]\s*$/, '');
+    const anchors = findTextAnchors(text).filter(isVisible);
+    const exact = (a) => core(a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement ? a.value : directText(a)) === wanted;
+    anchors.sort((a, b) => exact(b) - exact(a));
+    for (const a of anchors) {
+      const L = labelRect(a, wantedLower);
+      if (!L.height) continue;
+      const cy = L.top + L.height / 2;
+      const boxes = [...document.querySelectorAll('body *')]
+        .filter((e) => e !== a && !e.contains(a) && !a.contains(e) && !e.closest('[data-blujay-assistent]')
+          && (e.children.length === 0 || e.matches('input, select, textarea')) && isVisible(e))
+        .map((e) => ({ e, r: e.getBoundingClientRect() }))
+        .filter(({ r }) => r.width >= 6 && r.height >= 6 && r.left >= L.right - 2
+          && Math.abs(r.top + r.height / 2 - cy) <= Math.max(L.height, r.height) / 2 + 1)
+        .sort((x, y) => x.r.left - y.r.left);
+      if (boxes.length >= nth) return [boxes[nth - 1].e];
+    }
+    return [];
   }
 
   function findByXPath(xp) {
@@ -242,6 +289,8 @@
     else if (sel.startsWith('text=')) list = findByText(sel.slice(5));
     else if (sel.startsWith('label=')) list = findByLabel(sel.slice(6));
     else if (sel.startsWith('field=')) list = findByField(sel.slice(6));
+    else if (sel.startsWith('focus:')) list = findFocusedWithLabel(sel.slice(6));
+    else if (sel.startsWith('box=')) list = findBoxes(sel.slice(4));
     else if (sel.startsWith('contains=')) list = findTextAnchors(sel.slice(9));
     else if (sel.startsWith('xpath=')) list = findByXPath(sel.slice(6));
     else list = [...document.querySelectorAll(sel)];
@@ -1007,7 +1056,8 @@
         return false;
       case 'focusToken': {
         const a = document.activeElement;
-        if (!a) { sendResponse({ token: 'geen' }); return false; }
+        if (!a || a === document.body) { sendResponse({ token: 'geen' }); return false; }
+        if (isTiny(a)) { sendResponse({ token: 'tussen' }); return false; }
         if (!focusIds.has(a)) focusIds.set(a, ++focusSeq);
         sendResponse({ token: focusIds.get(a) });
         return false;
@@ -1025,14 +1075,9 @@
       case 'describeFocus': {
         const a = document.activeElement;
         if (!a || a === document.body) { sendResponse({ text: '(niets)' }); return false; }
-        let label = '';
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-        let n;
-        while ((n = walker.nextNode())) {
-          if (a.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING) break;
-          if (norm(n.data)) label = norm(n.data);
-        }
-        sendResponse({ text: `${a.tagName.toLowerCase()}${a.name ? ' ' + a.name : ''} bij "${label.slice(0, 40)}"${'value' in a && a.value ? ' (waarde ' + String(a.value).slice(0, 20) + ')' : ''}` });
+        if (isTiny(a)) { sendResponse({ text: '(tussenvakje)' }); return false; }
+        const v = 'value' in a && a.value ? ` (waarde "${String(a.value).slice(0, 20)}")` : '';
+        sendResponse({ text: `veld "${labelFor(a)}"${v}` });
         return false;
       }
       case 'clickTagged': {
