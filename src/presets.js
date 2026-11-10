@@ -69,7 +69,7 @@ const PRESETS = [
   },
   {
     id: 'uitslagdossier',
-    version: 5,
+    version: 6,
     stepDelay: 60,
     name: 'Uitslagdossier aanmaken',
     description: 'Sleep de paklijst (PDF) hierheen. De klant wordt herkend en het dossier wordt helemaal ingevuld.',
@@ -121,7 +121,7 @@ const PRESETS = [
       { type: 'read', selector: 'contains=Dossiernummer', pattern: 'Dossiernummer\\D*(\\d{6,})', variable: 'dossiernr', timeout: 20000 },
       { type: 'notify', value: 'Dossier {{dossiernr}} aangemaakt — gegevens invullen…' },
 
-      // 3. Kop van het dossier, in tab-volgorde
+      // 3. Kop van het dossier, in tab-volgorde (cursor start in Opdrachtgever, Tab → Referentie)
       { type: 'tabTo', selector: 'field=Referentie' },
       { type: 'type', selector: 'field=Referentie', value: '{{referentie}}' },
       { type: 'tabTo', selector: 'field=Extra ref', when: '{{extraref}} != ' },
@@ -155,7 +155,10 @@ const PRESETS = [
       { type: 'key', selector: 'field=Losref', value: 'Enter' },
       { type: 'wait', value: '1500' },
 
-      // 5. Aantal pallets (bijv. 33 EP): na de Enter moet je eerst weer een veld aanklikken; na afloop Enter.
+      // 5. Stapelbaar mag niet aangevinkt zijn (pas ná de Tab-reeks, omdat de muis de Tab-volgorde kan veranderen).
+      { type: 'check', selector: 'field=Stapelbaar', value: 'uit', optional: true, timeout: 3000 },
+
+      // 6. Aantal pallets (bijv. 33 EP): na de Enter moet je eerst weer een veld aanklikken; na afloop Enter.
       { type: 'click', selector: 'field=Aantal Pallets', when: '{{pallets}} != ' },
       { type: 'type', selector: 'field=Aantal Pallets', value: '{{pallets}}', when: '{{pallets}} != ' },
       { type: 'key', selector: 'focus', value: 'Tab', when: '{{pallets}} != ' },
@@ -163,7 +166,7 @@ const PRESETS = [
       { type: 'key', selector: 'focus', value: 'Enter', when: '{{pallets}} != ' },
       { type: 'wait', value: '1000', when: '{{pallets}} != ' },
 
-      // 6. Menu → Omschrijvingen → Instructies uitslag → tekst + Enter
+      // 7. Menu → Omschrijvingen → Instructies uitslag → tekst + Enter
       { type: 'click', selector: 'text=Menu', near: 'Artikelregels', when: '{{instructie}} != ' },
       { type: 'click', selector: 'text=Omschrijvingen', when: '{{instructie}} != ' },
       { type: 'click', selector: 'text=Instructies uitslag', when: '{{instructie}} != ' },

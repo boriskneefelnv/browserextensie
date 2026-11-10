@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Neele-Vat BluJay Assistent",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Voert vaste handelingen automatisch uit in BluJay, op basis van je invoer.",
   "permissions": [
     "storage",

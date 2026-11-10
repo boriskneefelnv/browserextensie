@@ -47,23 +47,23 @@
 (function () {
   // [label, x, y, velden: [id, breedte, tabindex, standaardwaarde, type]]
   const L = [
-    ['Opdrachtgever', 10, 10, [['opdrtoon', 70, -1, 'TOPBROUD', 'ro']]],
-    ['Afzender', 10, 30, [['afz', 130, 3]]],
-    ['Laadadres', 10, 50, [['laadadres', 130, 4]]],
-    ['Laaddatum', 10, 70, [['laaddat', 60, 5, '10-11-26'], ['laadvan', 40, 6, '07:59'], ['laadtot', 40, 7, '16:01']]],
-    ['Konditie', 10, 90, [['kond', 36, 8], ['kondplaats', 90, 9]]],
-    ['Vervoerder', 10, 110, [['verv', 130, 10]]],
-    ['Laadref', 10, 200, [['laadref', 180, 11]]],
-    ['Referentie', 300, 10, [['ref', 180, 1]]],
-    ['Extra ref.', 300, 30, [['extra', 180, 2]]],
-    ['Ontvanger', 300, 50, [['ontv', 120, 12, 'TOPBROUD']]],
-    ['Losadres', 300, 70, [['losadres', 120, 13, 'TOPBROUD']]],
-    ['Losdatum', 300, 90, [['losdat', 60, 14, '10-11-26'], ['losvan', 40, 15], ['lostot', 40, 16]]],
-    ['Losref', 300, 200, [['losref', 180, 17]]],
-    ['Aangemaakt', 560, 10, [['aangemaakt', 170, -1, 'Boris Kneefel', 'ro']]],
-    ['Aantal Pallets', 560, 120, [['pal', 50, 20, '0'], ['palsoort', 50, 21]]],
-    ['Stapelbaar', 560, 140, [['stapel', 14, 40, '', 'checkbox']]],
-    ['Verwachte datum', 10, 290, [['verwdat', 60, 30, '10-11-26'], ['verwtijd', 40, 31, '07:59']]],
+    ['Opdrachtgever', 10, 11, [['opdrtoon', 70, 1, 'TOPBROUD']]],
+    ['Afzender', 10, 31, [['afz', 130, 4]]],
+    ['Laadadres', 10, 51, [['laadadres', 130, 5]]],
+    ['Laaddatum', 10, 71, [['laaddat', 60, 6, '10-11-26'], ['laadvan', 40, 7, '07:59'], ['laadtot', 40, 8, '16:01']]],
+    ['Konditie', 10, 91, [['kond', 36, 9], ['kondplaats', 90, 10]]],
+    ['Vervoerder', 10, 111, [['verv', 130, 11]]],
+    ['Laadref', 10, 201, [['laadref', 180, 12]]],
+    ['Referentie', 300, 11, [['ref', 180, 2]]],
+    ['Extra ref.', 300, 30, [['extra', 180, 3]]],
+    ['Ontvanger', 300, 51, [['ontv', 120, 13, 'TOPBROUD']]],
+    ['Losadres', 300, 71, [['losadres', 120, 14, 'TOPBROUD']]],
+    ['Losdatum', 300, 91, [['losdat', 60, 15, '10-11-26'], ['losvan', 40, 16], ['lostot', 40, 17]]],
+    ['Losref', 300, 201, [['losref', 180, 18]]],
+    ['Aangemaakt', 560, 11, [['aangemaakt', 170, -1, 'Boris Kneefel', 'ro']]],
+    ['Aantal Pallets', 560, 120, [['pal', 50, 21, '0'], ['palsoort', 50, 22]]],
+    ['Stapelbaar', 560, 141, [['stapel', 14, 41, '', 'checkbox']]],
+    ['Verwachte datum', 10, 290, [['verwdat', 60, 31, '10-11-26'], ['verwtijd', 40, 32, '07:59']]],
   ];
   const box = document.getElementById('dossier');
   const labels = [], inputs = [];
@@ -125,10 +125,10 @@ $('sjab').addEventListener('keydown', (e) => {
       $('dossier').style.display = '';
       document.querySelectorAll('#dossier input').forEach((i) => (i.disabled = false));
       $('afz').value = $('opdr').value;
-      $('stapel').checked = false;
+      $('stapel').checked = true; // BluJay vinkt Stapelbaar soms standaard aan
       $('tabkop').textContent = 'Dossiernummer 60123456';
       $('bar').style.display = '';
-      $('ref').focus();
+      $('opdrtoon').focus(); // cursor begint in Opdrachtgever; Tab → Referentie
       log('dossier aangemaakt');
     }, 600);
   }

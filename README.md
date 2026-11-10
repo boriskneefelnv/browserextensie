@@ -55,7 +55,7 @@ Daarna bevestigt hij:
 4. Klik **▶ Uitvoeren**. Hij doet dan:
    Uitslag → Uitslagorders → Zending `60WH` Tab Tab → Afh.code → `u` → Tab tot Opdrachtgever → Tab Tab (dossier wordt gemaakt)
    → Referentie, Laadadres, Laaddatum/-tijden, Konditie + plaats, **Laadref = nieuw dossiernummer**, Ontvanger, Losadres,
-   Losdatum/-tijden, Losref → Enter → Aantal pallets aanklikken (bijv. 33 EP) → Enter → Menu → Omschrijvingen → Instructies uitslag
+   Losdatum/-tijden, Losref → Enter → Stapelbaar uit → Aantal pallets aanklikken (bijv. 33 EP) → Enter → Menu → Omschrijvingen → Instructies uitslag
    → "Laden in de lengte" + Enter.
 
 | Uit de paklijst (Top Brands) | Dossierveld |
