@@ -6,7 +6,7 @@
 // eslint-disable-next-line no-unused-vars
 var BA = (() => {
   const DEFAULT_SETTINGS = {
-    stepDelay: 300, // ms wachten tussen stappen
+    stepDelay: 60, // ms wachten tussen stappen (er wordt al gewacht tot elementen/pagina's klaar zijn)
     timeout: 10000, // ms wachten tot een element verschijnt
   };
 

@@ -6,8 +6,9 @@
 const PRESETS = [
   {
     id: 'dossiermutaties',
-    version: 4,
+    version: 5,
     realKeys: true,
+    stepDelay: 30,
     name: 'Dossiermutaties draaien',
     description: 'Menu → keuze cq0579 → selectie invullen. Klantcode leeg = alle klanten.',
     urlPattern: '',
@@ -25,7 +26,7 @@ const PRESETS = [
 
       // 1. Menu in de zijbalk
       { type: 'click', selector: 'text=Menu' },
-      { type: 'wait', value: '1500' },
+      { type: 'wait', value: '300' },
 
       // 2. "Uw keuze": ts4117 vervangen door cq0579 en Tab
       { type: 'type', selector: 'field=Uw keuze', value: 'cq0579' },
@@ -68,7 +69,8 @@ const PRESETS = [
   },
   {
     id: 'uitslagdossier',
-    version: 3,
+    version: 4,
+    stepDelay: 60,
     name: 'Uitslagdossier aanmaken',
     description: 'Sleep de paklijst (PDF) hierheen. De klant wordt herkend en het dossier wordt helemaal ingevuld.',
     urlPattern: '',
@@ -103,7 +105,7 @@ const PRESETS = [
       // 1. Uitslag → Uitslagorders (Uitslag alleen openklappen als hij nog dicht is)
       { type: 'click', selector: 'text=Uitslag', when: '!bestaat: text=Uitslagorders' },
       { type: 'click', selector: 'text=Uitslagorders' },
-      { type: 'wait', value: '2500' },
+      { type: 'wait', value: '500' },
 
       // 2. Aanmaken nieuw dossier — alles via Tab, in de volgorde van BluJay (nooit naar andere velden springen).
       { type: 'type', selector: 'focus || field=Afdeling', value: '60WH', timeout: 20000 },
@@ -149,7 +151,7 @@ const PRESETS = [
       { type: 'tabTo', selector: 'field=Losref' },
       { type: 'type', selector: 'field=Losref', value: '{{losref}}', when: '{{losref}} != ' },
       { type: 'key', selector: 'field=Losref', value: 'Enter' },
-      { type: 'wait', value: '2500' },
+      { type: 'wait', value: '1500' },
 
       // 5. Aantal pallets (bijv. 33 EP): na de Enter moet je eerst weer een veld aanklikken; na afloop Enter.
       { type: 'click', selector: 'field=Aantal Pallets', when: '{{pallets}} != ' },
@@ -157,7 +159,7 @@ const PRESETS = [
       { type: 'key', selector: 'focus', value: 'Tab', when: '{{pallets}} != ' },
       { type: 'type', selector: 'field=Aantal Pallets [2]', value: '{{palletsoort}}', when: '{{pallets}} != ' },
       { type: 'key', selector: 'focus', value: 'Enter', when: '{{pallets}} != ' },
-      { type: 'wait', value: '2000', when: '{{pallets}} != ' },
+      { type: 'wait', value: '1000', when: '{{pallets}} != ' },
 
       // 6. Menu → Omschrijvingen → Instructies uitslag → tekst + Enter
       { type: 'click', selector: 'text=Menu', near: 'Artikelregels', when: '{{instructie}} != ' },

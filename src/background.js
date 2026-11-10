@@ -76,54 +76,56 @@ chrome.tabs.onCreated.addListener((tab) => {
 });
 
 /** Eén keer alle tabbladen/frames afzoeken naar één selector. */
-async function scanOnce(ctrl, selector, { frameHint, frameText, near, allowHidden }) {
+async function scanOnce(ctrl, selector, { frameHint, frameText, near, allowHidden, pattern }) {
   const isFocus = /^(focus|focus-any|actief veld|cursor)$/i.test(String(selector).trim());
-  let foundIn = null;
-  let bestFocus = -1;
   // Nieuwste tabblad (bijv. een net geopend venster) eerst.
   for (const tabId of [...ctrl.tabs].reverse()) {
     let frames = [];
     try {
       frames = (await chrome.webNavigation.getAllFrames({ tabId })) || [];
     } catch { /* tab weg */ }
-    const score = (f) => (frameHint && f.url.includes(frameHint) ? 0 : f.frameId === 0 ? 1 : 2);
+    const last = ctrl.lastFrame && ctrl.lastFrame.tabId === tabId ? ctrl.lastFrame.frameId : null;
+    const score = (f) => (frameHint && f.url.includes(frameHint) ? 0 : f.frameId === last ? 1 : f.frameId === 0 ? 2 : 3);
     frames.sort((a, b) => score(a) - score(b));
-    for (const f of frames) {
-      const r = await sendToFrame(tabId, f.frameId, { type: 'probe', selector, allowHidden, frameText, near });
+    // Alle frames tegelijk bevragen (veel sneller dan één voor één); volgorde van voorkeur blijft gelden.
+    const results = await Promise.all(frames.map((f) =>
+      sendToFrame(tabId, f.frameId, { type: 'probe', selector, allowHidden, frameText, near, pattern })));
+    let best = null;
+    let bestFocus = -1;
+    for (let i = 0; i < frames.length; i++) {
+      const r = results[i];
       if (r && r.error) throw new Error(r.error);
       if (!r || !r.found) continue;
+      if (!isFocus) return { tabId, frameId: frames[i].frameId, selector };
       // Bij "focus": het frame waar het laatst een veld actief werd wint.
-      if (isFocus) {
-        if ((r.focusAt || 0) > bestFocus) { bestFocus = r.focusAt || 0; foundIn = { tabId, frameId: f.frameId, selector }; }
-        continue;
-      }
-      return { tabId, frameId: f.frameId, selector };
+      if ((r.focusAt || 0) > bestFocus) { bestFocus = r.focusAt || 0; best = { tabId, frameId: frames[i].frameId, selector }; }
     }
+    if (best) return best;
   }
-  return foundIn;
+  return null;
 }
 
 /**
  * Zoekt in welk tabblad/frame het element staat. Geeft { tabId, frameId, selector } terug of null.
  * Meerdere alternatieven kan met " || ", bijv. "focus || field=Zending" (eerste die gevonden wordt).
  */
-async function locate(ctrl, selector, { frameHint, frameText = '', near = '', timeout, allowHidden = false, wantGone = false, label = '' }) {
+async function locate(ctrl, selector, { frameHint, frameText = '', near = '', pattern = '', timeout, allowHidden = false, wantGone = false, label = '' }) {
   const started = Date.now();
   const deadline = started + timeout;
   const alternatives = String(selector).split(/\s+\|\|\s+/).map((x) => x.trim()).filter(Boolean);
   for (;;) {
     let foundIn = null;
     for (const alt of alternatives) {
-      foundIn = await scanOnce(ctrl, alt, { frameHint, frameText, near, allowHidden });
+      foundIn = await scanOnce(ctrl, alt, { frameHint, frameText, near, allowHidden, pattern });
       if (foundIn) break;
     }
-    if (!wantGone && foundIn) return foundIn;
+    if (!wantGone && foundIn) { ctrl.lastFrame = foundIn; return foundIn; }
     if (wantGone && !foundIn) return true;
     if (ctrl.stopped) throw new Error('gestopt door gebruiker');
     if (Date.now() > deadline) return wantGone ? false : null;
     const secs = Math.round((Date.now() - started) / 1000);
     if (secs >= 2) showProgress(ctrl, `${label} — wacht ${wantGone ? 'tot weg' : 'op'} "${selector}" (${secs}s / ${Math.round(timeout / 1000)}s)`);
-    await sleep(250);
+    await sleep(120);
   }
 }
 
@@ -161,6 +163,30 @@ function mainWorldClick(tag) {
   if (typeof el.click === 'function') el.click();
   else fire('click');
   return true;
+}
+
+// Paginaladingen bijhouden, zodat we na een klik precies zo lang wachten als nodig.
+const navs = new Map(); // "tabId:frameId" -> { started, done }
+chrome.webNavigation.onBeforeNavigate.addListener((d) => {
+  if (d.url.startsWith('about:')) return;
+  navs.set(`${d.tabId}:${d.frameId}`, { tabId: d.tabId, started: Date.now(), done: false });
+});
+const navDone = (d) => {
+  const n = navs.get(`${d.tabId}:${d.frameId}`);
+  if (n) n.done = true;
+};
+chrome.webNavigation.onCompleted.addListener(navDone);
+chrome.webNavigation.onErrorOccurred.addListener(navDone);
+
+/** Wacht tot paginaladingen die na "since" begonnen zijn klaar zijn (max. timeout). */
+async function waitForNavigations(ctrl, since, timeout = 20000) {
+  await sleep(150); // even de browser de kans geven een navigatie te starten
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const busy = [...navs.values()].some((n) => ctrl.tabs.includes(n.tabId) && n.started >= since && !n.done);
+    if (!busy || Date.now() > deadline || ctrl.stopped) return;
+    await sleep(50);
+  }
 }
 
 async function clickTagged(tabId, frameId, tag) {
@@ -263,6 +289,14 @@ async function checkWhen(ctrl, when, vars) {
   return m[1] ? !found : !!found;
 }
 
+/** Unieke aanduiding van het element met de cursor (om te zien of Tab de cursor verplaatst heeft). */
+async function focusToken(ctrl) {
+  const f = await scanOnce(ctrl, 'focus-any', {});
+  if (!f) return 'geen';
+  const r = await sendToFrame(f.tabId, f.frameId, { type: 'focusToken' });
+  return `${f.tabId}:${f.frameId}:${r?.token ?? '?'}`;
+}
+
 /** Druk Tab tot de cursor in het gevraagde veld staat (volgt de tab-volgorde van BluJay). */
 async function tabTo(ctrl, step, selector, fill, timeout, label) {
   const max = Number(fill(step.value)) || 10;
@@ -291,9 +325,13 @@ async function tabTo(ctrl, step, selector, fill, timeout, label) {
       i = -1; // na het aanklikken opnieuw tellen
       continue;
     }
+    const before = await focusToken(ctrl);
     if (ctrl.realKeys && (await cdpAttach(ctrl, f.tabId))) await cdpKey(f.tabId, 'Tab');
     else await sendToFrame(f.tabId, f.frameId, { type: 'exec', step: { type: 'key', selector: 'focus-any', value: 'Tab' } });
-    await sleep(350);
+    // Wachten tot de cursor verplaatst is (BluJay doet soms eerst een controle), max. 1,5 s.
+    const until = Date.now() + 1500;
+    while (Date.now() < until && (await focusToken(ctrl)) === before) await sleep(40);
+    await sleep(60);
   }
 }
 
@@ -336,9 +374,16 @@ async function runStep(ctrl, step, vars, settings, label) {
   const deadline = Date.now() + timeout;
   for (;;) {
     const where = await locate(ctrl, selector, {
-      frameHint: step.frame, frameText: fill(step.frameText || ''), near: fill(step.near || ''), timeout: Math.max(0, deadline - Date.now()), allowHidden: step.type === 'read', label,
+      frameHint: step.frame, frameText: fill(step.frameText || ''), near: fill(step.near || ''), pattern: step.type === 'read' ? step.pattern || '' : '', timeout: Math.max(0, deadline - Date.now()), allowHidden: step.type === 'read', label,
     });
-    if (!where) throw new Error(`element niet gevonden: ${selector}`);
+    if (!where) {
+      if (step.type === 'read' && step.pattern) {
+        throw new Error(step.variable === 'dossiernr'
+          ? 'er is geen dossiernummer verschenen — het dossier is waarschijnlijk niet aangemaakt (controleer Afh.code, opdrachtgever en de Tab-volgorde)'
+          : `geen "${selector}" gevonden waarvan de waarde past bij ${step.pattern}`);
+      }
+      throw new Error(`element niet gevonden: ${selector}`);
+    }
     if (step.type === 'waitFor') return;
 
     const value = fill(step.value);
@@ -351,7 +396,9 @@ async function runStep(ctrl, step, vars, settings, label) {
     if (!res.ok) throw new Error(res.error || 'onbekende fout');
 
     if (res.value && res.value.__clickTag) {
+      const t = Date.now();
       await clickTagged(where.tabId, where.frameId, res.value.__clickTag);
+      await waitForNavigations(ctrl, t);
       return;
     }
     if (res.value && res.value.__real) {
@@ -427,7 +474,7 @@ async function runMacro(tabId, macroId, extraVars = {}, source = 'handmatig') {
         if (step.optional) continue;
         throw new Error(`stap ${stepNr} (${typeLabel}): ${e.message}`);
       }
-      if (delay && i < total - 1) await sleep(delay);
+      if (delay && i < total - 1 && !['setVar', 'notify', 'wait', 'stop'].includes(step.type)) await sleep(delay);
     }
     showProgress(ctrl, '');
     toastAll(ctrl, `✔ "${macro.name}" is uitgevoerd`, 'ok');

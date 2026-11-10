@@ -89,7 +89,11 @@ input.missing { border-color: #d9534f; background: #fff3f3; }
 .bj-btn:disabled { opacity: .5; cursor: default; }
 
 /* Meldingen en lopende actie */
-.msg { margin: 6px 6px 0; padding: 5px 8px; border: 1px solid; }
+.msg { display: flex; align-items: flex-start; gap: 6px; margin: 6px 6px 0; padding: 5px 4px 5px 8px; border: 1px solid; }
+.msg[hidden] { display: none; }
+.msg-text { flex: 1; }
+.msg-close { flex: none; width: 18px; height: 18px; padding: 0; font: bold 14px/16px Verdana, sans-serif; color: inherit; background: transparent; border: 1px solid transparent; border-radius: 2px; cursor: pointer; opacity: .7; }
+.msg-close:hover { opacity: 1; border-color: currentColor; background: rgba(255,255,255,.6); }
 .msg.ok { background: #eef7ee; border-color: #b9dcb9; color: #1d5e20; }
 .msg.fail { background: #fdeeee; border-color: #e7b5b5; color: #a12020; font-weight: bold; }
 .box { margin: 6px 6px 0; border: 1px solid var(--bj-line); background: #fff; }

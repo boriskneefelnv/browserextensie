@@ -140,6 +140,9 @@
     return out;
   }
 
+  const focusIds = new WeakMap();
+  let focusSeq = 0;
+
   // Wanneer werd in dit frame voor het laatst een veld actief? (om tussen frames het juiste te kiezen)
   let lastFocusAt = 0;
   document.addEventListener('focusin', () => { lastFocusAt = Date.now(); }, true);
@@ -693,6 +696,9 @@
         const d = document.createElement('div');
         d.className = 't ' + kind;
         d.append(Object.assign(document.createElement('span'), { textContent: text }));
+        d.title = 'Klik om te sluiten';
+        d.style.cursor = 'pointer';
+        d.addEventListener('click', () => d.remove());
         box.prepend(d);
         setTimeout(() => d.remove(), kind === 'error' ? 10000 : 4000);
       },
@@ -729,7 +735,13 @@
             sendResponse({ found: false });
             return false;
           }
-          const el = find(msg.selector, msg.allowHidden, msg.near);
+          let el = find(msg.selector, msg.allowHidden, msg.near);
+          if (el && msg.pattern) {
+            // Alleen "gevonden" als een van de elementen een waarde heeft die bij het patroon past.
+            let re = null;
+            try { re = new RegExp(msg.pattern); } catch { /* ongeldig patroon */ }
+            el = re ? findAll(msg.selector).list.find((e) => re.test(readValue(e))) || null : el;
+          }
           sendResponse({ found: !!el, focusAt: el && document.activeElement === el ? (document.hasFocus() ? Date.now() + 1e9 : lastFocusAt) : 0 });
         } catch (e) {
           sendResponse({ found: false, error: `ongeldige selector "${msg.selector}": ${e.message}` });
@@ -748,6 +760,13 @@
       case 'progress':
         if (isTop) ui.progress(msg.text);
         return false;
+      case 'focusToken': {
+        const a = document.activeElement;
+        if (!a) { sendResponse({ token: 'geen' }); return false; }
+        if (!focusIds.has(a)) focusIds.set(a, ++focusSeq);
+        sendResponse({ token: focusIds.get(a) });
+        return false;
+      }
       case 'isFocused': {
         // Staat de cursor in (een van) de velden die bij deze selector horen?
         try {

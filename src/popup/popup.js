@@ -10,9 +10,11 @@ let startedAt = 0;
 let view = null; // null = overzicht, anders macroId
 
 function showError(text) {
-  $('error').textContent = text;
+  $('error').querySelector('.msg-text').textContent = text;
   $('error').hidden = !text;
 }
+
+let dismissedRun = null; // tijdstip van de weggeklikte resultaatmelding
 
 function el(tag, attrs = {}, ...children) {
   const e = document.createElement(tag);
@@ -343,11 +345,11 @@ function render() {
 
   // Resultaat van de laatste uitvoering (< 2 min geleden).
   const last = info.lastRun;
-  const recent = last && Date.now() - new Date(last.time).getTime() < 2 * 60 * 1000;
+  const recent = last && last.time !== dismissedRun && Date.now() - new Date(last.time).getTime() < 2 * 60 * 1000;
   $('lastRun').hidden = !!running || !recent;
   if (!running && recent) {
     $('lastRun').className = 'msg ' + (last.ok ? 'ok' : 'fail');
-    $('lastRun').textContent = last.ok ? `✔ "${last.macro}" is uitgevoerd.` : `✖ "${last.macro}" mislukt — ${last.error}`;
+    $('lastRun').querySelector('.msg-text').textContent = last.ok ? `✔ "${last.macro}" is uitgevoerd.` : `✖ "${last.macro}" mislukt — ${last.error}`;
   }
 
   $('recActive').hidden = !info.recording;
@@ -376,11 +378,19 @@ async function init() {
   chrome.tabs.onActivated.addListener(async () => { tabId = await currentTab(); refresh(); });
   chrome.tabs.onUpdated.addListener((id, change) => { if (id === tabId && change.status === 'complete') refresh(); });
   chrome.storage.onChanged.addListener((changes, area) => { if (area === 'local' && (changes.macros || changes.log)) refresh(); });
+  ({ dismissedRun = null } = await chrome.storage.session.get('dismissedRun'));
   const { popupShowAll } = await chrome.storage.local.get('popupShowAll');
   $('showAll').checked = !!popupShowAll;
   await refresh();
   setInterval(() => { if (info?.recording || info?.running || Date.now() - startedAt < 3000) refresh(); }, 500);
 }
+
+$('error').querySelector('.msg-close').addEventListener('click', () => showError(''));
+$('lastRun').querySelector('.msg-close').addEventListener('click', () => {
+  dismissedRun = info?.lastRun?.time || null;
+  chrome.storage.session.set({ dismissedRun });
+  $('lastRun').hidden = true;
+});
 
 const openOptions = () => chrome.runtime.openOptionsPage();
 $('openOptions').addEventListener('click', openOptions);
