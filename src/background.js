@@ -194,6 +194,25 @@ async function waitForNavigations(ctrl, since, timeout = 20000) {
   }
 }
 
+/**
+ * Klik uitvoeren. Standaard (bij echte toetsaanslagen) als echte muisklik; komt die niet precies op
+ * het element aan, dan alsnog in de pagina-context. clickMode 'dom' = alleen in de pagina-context.
+ */
+async function performClick(ctrl, where, v, step) {
+  const t = Date.now();
+  let done = false;
+  if (ctrl.realKeys && step.clickMode !== 'dom' && v.coordsOk && (await cdpAttach(ctrl, where.tabId))) {
+    // Muis-coördinaten zijn CSS-pixels van het tabblad (zoom wordt door de browser zelf verrekend).
+    await cdpClick(where.tabId, v.x, v.y);
+    await sleep(30);
+    const hit = await sendToFrame(where.tabId, where.frameId, { type: 'clickHit', tag: v.__clickTag });
+    done = !!hit?.hit;
+    ctrl.trace.push(`   echte muisklik op (${Math.round(v.x)},${Math.round(v.y)}): ${done ? 'raak' : 'niet raak → klik in de pagina'}`);
+  }
+  if (!done) await clickTagged(where.tabId, where.frameId, v.__clickTag);
+  await waitForNavigations(ctrl, t);
+}
+
 async function clickTagged(tabId, frameId, tag) {
   try {
     const [res] = await chrome.scripting.executeScript({
@@ -526,15 +545,20 @@ async function runStep(ctrl, step, vars, settings, label) {
     if (!res.ok) throw new Error(res.error || 'onbekende fout');
 
     if (res.value && res.value.__clickTag) {
-      const t = Date.now();
-      const v = res.value;
-      if (ctrl.realKeys && v.coordsOk && (await cdpAttach(ctrl, where.tabId))) {
-        // Echte muisklik op de plek van het element (BluJay reageert niet altijd op nagebootste klikken).
-        await cdpClick(where.tabId, v.x, v.y);
-      } else {
-        await clickTagged(where.tabId, where.frameId, v.__clickTag);
+      await performClick(ctrl, where, res.value, step);
+      if (step.expect) {
+        // Controleren of de klik effect had (bijv. het volgende scherm verschijnt); anders nog eens op de andere manier.
+        const exp = fill(step.expect);
+        const expTimeout = Number(step.expectTimeout) || 5000;
+        if (!(await locate(ctrl, exp, { timeout: expTimeout, label }))) {
+          ctrl.trace.push(`   na de klik verscheen "${exp}" niet → opnieuw klikken op de andere manier`);
+          const r2 = await sendToFrame(where.tabId, where.frameId, { type: 'exec', step: { ...step, selector: where.selector } });
+          if (r2?.value?.__clickTag) await performClick(ctrl, where, r2.value, { ...step, clickMode: step.clickMode === 'dom' ? 'echt' : 'dom' });
+          if (!(await locate(ctrl, exp, { timeout: Math.max(expTimeout, 8000), label }))) {
+            throw new Error(`klik op "${selector}" had geen effect ("${exp}" verscheen niet)`);
+          }
+        }
       }
-      await waitForNavigations(ctrl, t);
       return;
     }
     if (res.value && res.value.__real) {

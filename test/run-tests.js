@@ -173,6 +173,8 @@ async function test(name, fn) {
   const runDossier = async (vars) => {
     await sw.evaluate((presets) => chrome.storage.local.set({ macros: presets, settings: { stepDelay: 30, timeout: 5000 } }), await sw.evaluate(() => PRESETS));
     const id = await dossierTab();
+    await sw.evaluate((id) => chrome.tabs.setZoom(id, 0.9), id); // zoom 90%, zoals bij de gebruiker
+    await dossierPage.waitForTimeout(300);
     return sw.evaluate(({ id, vars }) => runMacro(id, 'dossiermutaties', vars, 'test'), { id, vars });
   };
 
@@ -268,6 +270,8 @@ async function test(name, fn) {
     await up.waitForTimeout(500);
     await sw.evaluate((presets) => chrome.storage.local.set({ macros: presets, settings: { stepDelay: 30, timeout: 5000 } }), await sw.evaluate(() => PRESETS));
     const id = await sw.evaluate(async (url) => (await chrome.tabs.query({})).find((t) => t.url === url).id, `${base}/blujay/index.html${hash}`);
+    await sw.evaluate((id) => chrome.tabs.setZoom(id, 0.9), id); // zoals bij de gebruiker: niet op 100%
+    await up.waitForTimeout(300);
     const res = await sw.evaluate(({ id, vars }) => runMacro(id, 'uitslagdossier', vars, 'test'), { id, vars: uitslagVars });
     const model = await up.evaluate(() => ({ ...window.model }));
     const logText = await up.textContent('#log');

@@ -547,8 +547,21 @@
     } catch {
       coordsOk = false; // frame van een ander domein: positie niet te bepalen
     }
-    return { __clickTag: tag, x, y, coordsOk };
+    // Ligt het element op dat punt bovenop (niet bedekt door iets anders)?
+    const lx = r.left + Math.min(r.width / 2, 40);
+    const ly = r.top + r.height / 2;
+    const top = document.elementFromPoint(lx, ly);
+    const visibleAtPoint = !!top && (top === el || el.contains(top) || top.contains(el));
+    // Bijhouden of de echte muisklik op dit element aankomt.
+    clickHits.set(tag, false);
+    const onDown = (e) => {
+      if (e.isTrusted && (e.target === el || el.contains(e.target))) clickHits.set(tag, true);
+    };
+    window.addEventListener('mousedown', onDown, true);
+    setTimeout(() => { window.removeEventListener('mousedown', onDown, true); clickHits.delete(tag); }, 5000);
+    return { __clickTag: tag, x, y, coordsOk: coordsOk && visibleAtPoint };
   }
+  const clickHits = new Map();
 
   /** Zet de cursor in het veld (en selecteert de inhoud) zodat de achtergrond echte toetsaanslagen kan sturen. */
   function focusForKeys(el, selectAll) {
@@ -1076,6 +1089,9 @@
       case 'diagState':
         setDiag(msg.active);
         if (isTop) ui.diagIndicator(msg.active, msg.count);
+        return false;
+      case 'clickHit':
+        sendResponse({ hit: !!clickHits.get(msg.tag) });
         return false;
       case 'focusToken': {
         const a = document.activeElement;

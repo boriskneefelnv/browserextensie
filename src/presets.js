@@ -6,7 +6,7 @@
 const PRESETS = [
   {
     id: 'dossiermutaties',
-    version: 5,
+    version: 6,
     realKeys: true,
     stepDelay: 30,
     name: 'Dossiermutaties draaien',
@@ -25,7 +25,7 @@ const PRESETS = [
       { type: 'setVar', variable: 'klant_tot', value: 'ZZZ', when: '{{klant}} == ' },
 
       // 1. Menu in de zijbalk
-      { type: 'click', selector: 'text=Menu' },
+      { type: 'click', selector: 'text=Menu', clickMode: 'dom' },
       { type: 'wait', value: '300' },
 
       // 2. "Uw keuze": ts4117 vervangen door cq0579 en Tab
@@ -69,7 +69,7 @@ const PRESETS = [
   },
   {
     id: 'uitslagdossier',
-    version: 9,
+    version: 10,
     stepDelay: 60,
     name: 'Uitslagdossier aanmaken',
     description: 'Sleep de paklijst (PDF) hierheen. De klant wordt herkend en het dossier wordt helemaal ingevuld.',
@@ -102,8 +102,8 @@ const PRESETS = [
       { type: 'setVar', variable: 'losadres', value: '{{ontvanger}}', when: '{{losadres}} == ' },
 
       // 1. Uitslag → Uitslagorders (Uitslag alleen openklappen als hij nog dicht is)
-      { type: 'click', selector: 'text=Uitslag', when: '!bestaat: text=Uitslagorders' },
-      { type: 'click', selector: 'text=Uitslagorders' },
+      { type: 'click', selector: 'text=Uitslag', when: '!bestaat: text=Uitslagorders', expect: 'text=Uitslagorders' },
+      { type: 'click', selector: 'text=Uitslagorders', expect: 'box=Zending', expectTimeout: 5000 },
 
       // 2. Scherm "Uitslag dossiers": op het Zending-vakje klikken, 60WH, Tab, Tab → "Aanmaken nieuw dossier"
       { type: 'click', selector: 'box=Zending', timeout: 20000 },
