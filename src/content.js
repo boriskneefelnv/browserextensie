@@ -601,6 +601,161 @@
   document.addEventListener('change', onRecChange, true);
   document.addEventListener('keydown', onRecKeydown, true);
 
+  // ============================================================ schermopbouw
+
+  /** Opbouw van het zichtbare scherm (teksten en velden met positie), om bij problemen mee te sturen. */
+  function screenDump(maxLines = 600) {
+    const items = [];
+    for (const el of document.querySelectorAll('body *')) {
+      if (el.closest('[data-blujay-assistent]') || !isVisible(el)) continue;
+      const r = el.getBoundingClientRect();
+      if (el.matches('input, select, textarea, button, [contenteditable=true]')) {
+        const v = el instanceof HTMLSelectElement ? el.options[el.selectedIndex]?.text : el.type === 'password' ? '***' : el.value;
+        items.push({ y: r.top, x: r.left, s: `${el === document.activeElement ? '► ' : ''}[${el.tagName.toLowerCase()}${el.type ? ' ' + el.type : ''}] name=${el.name || '-'} id=${el.id || '-'} tab=${el.tabIndex}${el.readOnly ? ' alleen-lezen' : ''}${el.disabled ? ' uit' : ''}${el.type === 'checkbox' ? (el.checked ? ' AAN' : ' UIT') : ''} ${Math.round(r.width)}x${Math.round(r.height)} waarde="${String(v ?? '').slice(0, 40)}"` });
+      } else {
+        const t = directText(el);
+        if (t) items.push({ y: r.top, x: r.left, s: `"${t.slice(0, 50)}" <${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}>` });
+      }
+    }
+    if (!items.length) return { text: '' };
+    items.sort((a, b) => Math.round(a.y / 5) - Math.round(b.y / 5) || a.x - b.x);
+    const a = document.activeElement;
+    const head = `actief element: ${a ? a.tagName.toLowerCase() + (a.name ? ' name=' + a.name : '') + (a.id ? ' id=' + a.id : '') : '-'}`;
+    return { hasFocus: document.hasFocus(), text: head + '\n' + items.slice(0, maxLines).map((i) => `${Math.round(i.y)},${Math.round(i.x)}  ${i.s}`).join('\n') };
+  }
+
+  // ============================================================ nauwkeurige opname (diagnose)
+  //
+  // Legt elke toets, klik, cursorverplaatsing, waardewijziging en paginalading vast, met het veld
+  // waar het om gaat (naam, label ernaast, waarde, positie). Bedoeld om BluJay-schermen te analyseren.
+
+  let diag = false;
+  let diagBuf = [];
+  let diagTimer = null;
+
+  /** Tekst die links op dezelfde regel staat (het label), anders de laatste tekst ervoor. */
+  function labelFor(el) {
+    const r = el.getBoundingClientRect();
+    const cy = r.top + r.height / 2;
+    let best = null;
+    let bestDx = Infinity;
+    for (const t of document.querySelectorAll('body *')) {
+      if (t === el || t.contains(el) || el.contains(t) || t.closest('[data-blujay-assistent]')) continue;
+      const tr = textRect(t);
+      if (!tr || Math.abs(tr.top + tr.height / 2 - cy) > Math.max(tr.height, r.height) / 2 + 1) continue;
+      const dx = r.left - tr.right;
+      if (dx >= -2 && dx < bestDx) { bestDx = dx; best = t; }
+    }
+    if (best) {
+      const v = best instanceof HTMLInputElement || best instanceof HTMLTextAreaElement ? best.value : directText(best);
+      return norm(v).slice(0, 40);
+    }
+    let label = '';
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = walker.nextNode())) {
+      if (el.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING) break;
+      if (norm(n.data)) label = norm(n.data);
+    }
+    return label.slice(0, 40);
+  }
+
+  function describeEl(el) {
+    if (!el || el === document.body || el === document.documentElement) return { tag: '(geen)' };
+    const r = el.getBoundingClientRect();
+    const isField = el.matches('input, select, textarea');
+    let value;
+    if (el instanceof HTMLSelectElement) value = el.options[el.selectedIndex]?.text;
+    else if (el.type === 'password') value = '***';
+    else if (el.type === 'checkbox' || el.type === 'radio') value = el.checked ? 'AAN' : 'UIT';
+    else if (isField) value = el.value;
+    return {
+      tag: el.tagName.toLowerCase(),
+      type: el.type || undefined,
+      name: el.getAttribute('name') || undefined,
+      id: el.id || undefined,
+      tab: el.tabIndex,
+      ro: el.readOnly || undefined,
+      dis: el.disabled || undefined,
+      label: isField ? labelFor(el) : undefined,
+      text: isField ? undefined : norm(el.innerText || el.textContent).slice(0, 40) || undefined,
+      value: value === undefined ? undefined : String(value).slice(0, 60),
+      pos: `${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)}`,
+    };
+  }
+
+  function dlog(kind, data = {}, now = false) {
+    if (!diag) return;
+    diagBuf.push({ t: Date.now(), kind, ...data });
+    // Klikken/Tab/Enter direct doorsturen: ze kunnen meteen een nieuw scherm laden.
+    if (now) flushDiag();
+    else if (!diagTimer) diagTimer = setTimeout(flushDiag, 200);
+  }
+
+  function flushDiag() {
+    clearTimeout(diagTimer);
+    diagTimer = null;
+    if (!diagBuf.length) return;
+    const events = diagBuf;
+    diagBuf = [];
+    send({ type: 'diagEvents', events, url: location.href, title: document.title });
+  }
+
+  const KEYNAMES = { ' ': 'Spatie' };
+  document.addEventListener('keydown', (e) => {
+    if (!diag || isOwnUi(e.target)) return;
+    const mods = [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && e.key.length > 1 && 'Shift', e.metaKey && 'Meta'].filter(Boolean);
+    const key = mods.concat(KEYNAMES[e.key] || e.key).join('+');
+    const el = document.activeElement;
+    dlog('toets', { key, trusted: e.isTrusted, el: describeEl(el) }, ['Tab', 'Enter', 'Escape'].includes(e.key) || e.key.startsWith('F'));
+    if (['Tab', 'Enter'].includes(e.key)) {
+      // Controleren of de cursor verplaatst (bij een verplicht leeg veld blijft hij staan).
+      const before = el;
+      const beforeVal = 'value' in (el || {}) ? el.value : null;
+      setTimeout(() => {
+        if (!diag) return;
+        if (document.activeElement === before && document.hasFocus()) {
+          dlog('blijft', { key: e.key, el: describeEl(before), changed: 'value' in before && before.value !== beforeVal });
+        }
+      }, 500);
+    }
+  }, true);
+
+  document.addEventListener('mousedown', (e) => {
+    if (!diag || isOwnUi(e.target) || !(e.target instanceof Element)) return;
+    dlog('klik', { button: ['links', 'midden', 'rechts'][e.button] || e.button, x: Math.round(e.clientX), y: Math.round(e.clientY), el: describeEl(e.target) }, true);
+  }, true);
+
+  document.addEventListener('focusin', (e) => {
+    if (!diag || isOwnUi(e.target)) return;
+    dlog('cursor', { el: describeEl(e.target) });
+  }, true);
+
+  const valueAtFocus = new WeakMap();
+  document.addEventListener('focusin', (e) => {
+    if (e.target && 'value' in e.target) valueAtFocus.set(e.target, e.target.value);
+  }, true);
+
+  document.addEventListener('change', (e) => {
+    if (!diag || isOwnUi(e.target)) return;
+    const el = e.target;
+    dlog('wijziging', { from: el.type === 'password' ? '***' : valueAtFocus.get(el), el: describeEl(el) });
+    if ('value' in el) valueAtFocus.set(el, el.value);
+  }, true);
+
+  window.addEventListener('beforeunload', () => { if (diag) dlog('verlaten', {}, true); });
+  window.addEventListener('pagehide', () => { if (diag) flushDiag(); });
+
+  function setDiag(active) {
+    if (active && !diag) {
+      diag = true;
+      dlog('geladen', { dump: screenDump(300).text });
+    } else if (!active && diag) {
+      flushDiag();
+      diag = false;
+    }
+  }
+
   // ============================================================ element kiezen
 
   let picking = false;
@@ -728,7 +883,7 @@
   // ============================================================ meldingen (alleen bovenste frame)
 
   const ui = (() => {
-    let host, shadow, box, rec, prog;
+    let host, shadow, box, rec, prog, dg;
     function ensure() {
       if (host) return;
       host = document.createElement('div');
@@ -774,6 +929,16 @@
           box.append(prog);
         }
         prog.replaceChildren(Object.assign(document.createElement('span'), { textContent: text }));
+      },
+      diagIndicator(active, count) {
+        if (!active) { dg?.remove(); dg = null; return; }
+        ensure();
+        if (!dg) {
+          dg = document.createElement('div');
+          dg.className = 'rec';
+          box.append(dg);
+        }
+        dg.innerHTML = `<span class="dot"></span>Nauwkeurige opname — ${count || 0} gebeurtenissen`;
       },
       recIndicator(active, count) {
         if (!active) { rec?.remove(); rec = null; return; }
@@ -833,26 +998,13 @@
         return false;
       }
       case 'dumpScreen': {
-        // Opbouw van het zichtbare scherm (teksten en velden met positie), om bij problemen mee te sturen.
-        const items = [];
-        for (const el of document.querySelectorAll('body *')) {
-          if (el.closest('[data-blujay-assistent]') || !isVisible(el)) continue;
-          const r = el.getBoundingClientRect();
-          if (el.matches('input, select, textarea, button, [contenteditable=true]')) {
-            const v = el instanceof HTMLSelectElement ? el.options[el.selectedIndex]?.text : el.value;
-            items.push({ y: r.top, x: r.left, s: `${el === document.activeElement ? '► ' : ''}[${el.tagName.toLowerCase()}${el.type ? ' ' + el.type : ''}] name=${el.name || '-'} id=${el.id || '-'} tab=${el.tabIndex}${el.readOnly ? ' alleen-lezen' : ''}${el.disabled ? ' uit' : ''} ${Math.round(r.width)}x${Math.round(r.height)} waarde="${String(v ?? '').slice(0, 40)}"` });
-          } else {
-            const t = directText(el);
-            if (t) items.push({ y: r.top, x: r.left, s: `"${t.slice(0, 50)}" <${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}>` });
-          }
-        }
-        if (!items.length) { sendResponse({ text: '' }); return false; }
-        items.sort((a, b) => Math.round(a.y / 5) - Math.round(b.y / 5) || a.x - b.x);
-        const a = document.activeElement;
-        const head = `actief element: ${a ? a.tagName.toLowerCase() + (a.name ? ' name=' + a.name : '') + (a.id ? ' id=' + a.id : '') : '-'}`;
-        sendResponse({ hasFocus: document.hasFocus(), text: head + '\n' + items.slice(0, 600).map((i) => `${Math.round(i.y)},${Math.round(i.x)}  ${i.s}`).join('\n') });
+        sendResponse(screenDump());
         return false;
       }
+      case 'diagState':
+        setDiag(msg.active);
+        if (isTop) ui.diagIndicator(msg.active, msg.count);
+        return false;
       case 'focusToken': {
         const a = document.activeElement;
         if (!a) { sendResponse({ token: 'geen' }); return false; }
@@ -908,6 +1060,13 @@
   });
 
   // ============================================================ start
+
+  send({ type: 'getDiagState' }).then((r) => {
+    if (r?.active) {
+      setDiag(true);
+      if (isTop) ui.diagIndicator(true, r.count);
+    }
+  });
 
   send({ type: 'getRecordingState' }).then((r) => {
     if (r?.active) setRecording(true, r.count);

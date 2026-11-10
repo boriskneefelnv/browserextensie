@@ -314,6 +314,53 @@ async function test(name, fn) {
     await up.close();
   });
 
+  await test('Nauwkeurige opname: elke toets, klik, cursor en "bleef staan" in het rapport', async () => {
+    const up = await context.newPage();
+    await up.goto(`${base}/uitslag/index.html`);
+    await up.frameLocator('#side').locator('text=Inslag').waitFor();
+    await up.waitForTimeout(400);
+    const id = await sw.evaluate(async (url) => (await chrome.tabs.query({})).find((t) => t.url === url).id, `${base}/uitslag/index.html`);
+    const st = await sw.evaluate((id) => handleMessage({ type: 'diagStart', tabId: id }, {}), id);
+    assert.ok(st.ok, st.error);
+    await up.waitForTimeout(300);
+    const side = up.frameLocator('#side');
+    await side.getByText('Uitslag', { exact: true }).click();
+    await side.getByText('Uitslagorders').click();
+    const main = up.frameLocator('#main');
+    await main.locator('#afd').waitFor();
+    await up.waitForTimeout(300);
+    await up.keyboard.type('60WH');
+    await up.keyboard.press('Tab');
+    await up.keyboard.press('Tab');
+    await main.locator('#afh').waitFor({ state: 'visible' });
+    await up.waitForTimeout(200);
+    await up.keyboard.type('u');
+    for (let i = 0; i < 4; i++) await up.keyboard.press('Tab');
+    await up.keyboard.type('TOPBROUD');
+    await up.keyboard.press('Tab');
+    await up.keyboard.press('Tab');
+    await main.locator('#ref').waitFor({ state: 'visible' });
+    await up.waitForTimeout(900);
+    await up.keyboard.press('Tab'); // Opdrachtgever → Referentie
+    await up.keyboard.press('Tab'); // Referentie leeg → blijft staan
+    await up.waitForTimeout(700);
+    await up.keyboard.type('REF1');
+    await up.keyboard.press('Tab');
+    await up.waitForTimeout(500);
+    const stop = await sw.evaluate(() => handleMessage({ type: 'diagStop', save: true }, {}));
+    assert.ok(stop.ok, stop.error);
+    const rep = await sw.evaluate(() => handleMessage({ type: 'diagReport' }, {}));
+    const t = rep.text;
+    for (const needle of ['KLIK      links', 'TOETS     Tab', 'CURSOR    → input', 'label "Afh.code"', 'label "Opdrachtgever"',
+      'BLIJFT    cursor bleef staan na Tab in input', 'label "Referentie"', 'WIJZIGING', 'SCHERM', '=========== SCHERMOPBOUW', 'TOETS     u ']) {
+      if (!t.includes(needle)) console.log(t.split("\n").slice(0, 45).join("\n"));
+      assert.ok(t.includes(needle), `rapport mist "${needle}"`);
+    }
+    fs.writeFileSync(path.join(os.tmpdir(), 'diag-rapport-test.txt'), t);
+    console.log(`       rapport: ${t.split('\n').length} regels (voorbeeld in ${path.join(os.tmpdir(), 'diag-rapport-test.txt')})`);
+    await up.close();
+  });
+
   await context.close();
   server.close();
   console.log(failures ? `\n${failures} test(s) mislukt` : '\nAlle tests geslaagd');

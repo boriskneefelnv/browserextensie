@@ -70,9 +70,14 @@ chrome.webNavigation.onCreatedNavigationTarget.addListener((d) => {
   const ctrl = ctrlForTab(d.sourceTabId);
   if (ctrl && !ctrl.tabs.includes(d.tabId)) ctrl.tabs.push(d.tabId);
 });
-chrome.tabs.onCreated.addListener((tab) => {
+chrome.tabs.onCreated.addListener(async (tab) => {
   const ctrl = tab.openerTabId != null ? ctrlForTab(tab.openerTabId) : null;
   if (ctrl && !ctrl.tabs.includes(tab.id)) ctrl.tabs.push(tab.id);
+  const diag = await getDiag();
+  if (diag && tab.openerTabId != null && diag.tabs.includes(tab.openerTabId) && !diag.tabs.includes(tab.id)) {
+    diag.tabs.push(tab.id);
+    await setDiagState(diag);
+  }
 });
 
 /** Eén keer alle tabbladen/frames afzoeken naar één selector. */
@@ -587,6 +592,70 @@ async function broadcastRecording(tabId, active, count = 0) {
   } catch { /* geen content script */ }
 }
 
+// ---------------------------------------------------------------- nauwkeurige opname (diagnose)
+
+let diagQueue = Promise.resolve();
+const getDiag = async () => (await chrome.storage.session.get('diag')).diag || null;
+const setDiagState = (diag) => chrome.storage.session.set({ diag });
+
+async function broadcastDiag(diag, active) {
+  for (const tabId of diag?.tabs || []) {
+    chrome.tabs.sendMessage(tabId, { type: 'diagState', active, count: diag.events.length }).catch(() => {});
+  }
+}
+
+function fmtEl(el) {
+  if (!el) return '';
+  if (el.tag === '(geen)') return '(geen veld)';
+  const bits = [`${el.tag}${el.type && el.type !== el.tag ? ' ' + el.type : ''}`];
+  if (el.label) bits.push(`label "${el.label}"`);
+  if (el.text) bits.push(`"${el.text}"`);
+  if (el.name) bits.push(`name=${el.name}`);
+  if (el.id) bits.push(`id=${el.id}`);
+  bits.push(`tab=${el.tab}`);
+  if (el.ro) bits.push('alleen-lezen');
+  if (el.dis) bits.push('uitgeschakeld');
+  if (el.value !== undefined) bits.push(`waarde "${el.value}"`);
+  bits.push(`@${el.pos}`);
+  return bits.join(' ');
+}
+
+function buildDiagReport(diag) {
+  const t0 = diag.started;
+  const sec = (t) => `+${((t - t0) / 1000).toFixed(2).padStart(7)}s`;
+  const lines = [
+    `NEELE-VAT BLUJAY ASSISTENT — NAUWKEURIGE OPNAME (versie ${chrome.runtime.getManifest().version})`,
+    `Gestart:  ${new Date(diag.started).toLocaleString('nl-NL')}`,
+    `Gestopt:  ${new Date(diag.stopped || Date.now()).toLocaleString('nl-NL')}`,
+    `Gebeurtenissen: ${diag.events.length}`,
+    '',
+    'Legenda: TOETS = toets ingedrukt (met het veld waar de cursor stond), CURSOR = cursor naar veld,',
+    'BLIJFT = cursor bleef staan na Tab/Enter, WIJZIGING = waarde veranderd, KLIK = muisklik, SCHERM = pagina/frame geladen.',
+    '',
+  ];
+  const dumps = [];
+  for (const e of diag.events) {
+    const where = `[frame ${e.frameId}${e.path ? ' ' + e.path : ''}]`;
+    let line;
+    switch (e.kind) {
+      case 'toets': line = `TOETS     ${e.key.padEnd(10)} in ${fmtEl(e.el)}${e.trusted === false ? '  (nagebootst)' : ''}`; break;
+      case 'cursor': line = `CURSOR    → ${fmtEl(e.el)}`; break;
+      case 'blijft': line = `BLIJFT    cursor bleef staan na ${e.key} in ${fmtEl(e.el)}${e.changed ? ' (waarde wel veranderd)' : ''}`; break;
+      case 'wijziging': line = `WIJZIGING "${e.from ?? ''}" → "${e.el?.value ?? ''}" in ${fmtEl(e.el)}`; break;
+      case 'klik': line = `KLIK      ${e.button} (${e.x},${e.y}) op ${fmtEl(e.el)}`; break;
+      case 'geladen':
+        line = `SCHERM    ${e.title ? '"' + e.title + '" ' : ''}${e.url}  (schermopbouw: zie bijlage ${dumps.length + 1})`;
+        dumps.push(`--- Bijlage ${dumps.length + 1}: ${sec(e.t)} ${where} ${e.url}\n${e.dump || '(leeg)'}`);
+        break;
+      case 'verlaten': line = 'SCHERM    wordt verlaten'; break;
+      default: line = `${e.kind} ${JSON.stringify(e)}`;
+    }
+    lines.push(`${sec(e.t)} ${where.padEnd(28)} ${line}`);
+  }
+  if (diag.endDump) dumps.push(`--- Schermopbouw bij stoppen\n${diag.endDump}`);
+  return lines.concat(['', '', '=========== SCHERMOPBOUW ===========', ...dumps]).join('\n');
+}
+
 // ---------------------------------------------------------------- berichten
 
 async function handleMessage(msg, sender) {
@@ -605,6 +674,7 @@ async function handleMessage(msg, sender) {
         matching: macros.filter((m) => BA.urlMatches(m.urlPattern, tab?.url)).map((m) => m.id),
         recording: rec && rec.tabId === msg.tabId ? { count: rec.steps.length } : null,
         recordingElsewhere: !!(rec && rec.tabId !== msg.tabId),
+        diag: await (async () => { const d = await getDiag(); return d ? { count: d.events.length, here: d.tabs.includes(msg.tabId) } : null; })(),
         running: ctrlForTab(msg.tabId)?.macroId || null,
         progress: ctrlForTab(msg.tabId)?.progress || '',
         lastPicked: lastPicked || null,
@@ -706,6 +776,76 @@ async function handleMessage(msg, sender) {
       await chrome.storage.session.set({ lastPicked: picked });
       toast(senderTab, `Element gekozen (gekopieerd): ${msg.selector}`, 'info');
       return { ok: true };
+    }
+
+    case 'diagStart': {
+      if (await getDiag()) return { ok: false, error: 'Er loopt al een nauwkeurige opname.' };
+      if (await getRecording()) return { ok: false, error: 'Stop eerst de gewone opname.' };
+      const diag = { tabId: msg.tabId, tabs: [msg.tabId], started: Date.now(), events: [] };
+      await setDiagState(diag);
+      setBadge(msg.tabId, 'REC', '#b52a2a');
+      await broadcastDiag(diag, true);
+      return { ok: true };
+    }
+
+    case 'getDiagState': {
+      const diag = await getDiag();
+      const active = !!(diag && diag.tabs.includes(senderTab));
+      return { active, count: active ? diag.events.length : 0 };
+    }
+
+    case 'diagEvents': {
+      diagQueue = diagQueue.then(async () => {
+        const diag = await getDiag();
+        if (!diag || !diag.tabs.includes(senderTab)) return;
+        let path = sender.url || msg.url;
+        try { const u = new URL(path); path = u.pathname.split('/').slice(-2).join('/'); } catch { /* negeer */ }
+        for (const e of msg.events) {
+          e.frameId = sender.frameId;
+          e.path = path;
+          if (e.kind === 'geladen') { e.url = msg.url; e.title = msg.title; }
+          diag.events.push(e);
+        }
+        await setDiagState(diag);
+        sendToFrame(diag.tabId, 0, { type: 'diagState', active: true, count: diag.events.length });
+      });
+      await diagQueue;
+      return { ok: true };
+    }
+
+    case 'diagStatus': {
+      const diag = await getDiag();
+      const { diagReport } = await chrome.storage.local.get('diagReport');
+      return {
+        active: !!diag,
+        count: diag ? diag.events.length : 0,
+        report: diagReport ? { time: diagReport.time, events: diagReport.events, size: diagReport.text.length } : null,
+      };
+    }
+
+    case 'diagStop': {
+      await diagQueue;
+      // Laatste gebeurtenissen uit de frames ophalen
+      const diag0 = await getDiag();
+      if (!diag0) return { ok: false, error: 'Geen nauwkeurige opname actief.' };
+      await broadcastDiag(diag0, false);
+      await sleep(400);
+      await diagQueue;
+      const diag = await getDiag();
+      await setDiagState(null);
+      setBadge(diag.tabId, '');
+      if (!msg.save) return { ok: true };
+      diag.stopped = Date.now();
+      const dump = await handleMessage({ type: 'dumpScreen', tabId: diag.tabId }, {});
+      diag.endDump = dump?.text || '';
+      const text = buildDiagReport(diag);
+      await chrome.storage.local.set({ diagReport: { time: diag.stopped, events: diag.events.length, text, json: JSON.stringify(diag) } });
+      return { ok: true, events: diag.events.length };
+    }
+
+    case 'diagReport': {
+      const { diagReport } = await chrome.storage.local.get('diagReport');
+      return diagReport || null;
     }
 
     case 'dumpScreen': {

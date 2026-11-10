@@ -354,6 +354,9 @@ function render() {
   $('traceBar').hidden = !!running || !recent || last.ok || !(last.trace && last.trace.length);
 
   $('recActive').hidden = !info.recording;
+  $('diagActive').hidden = !info.diag;
+  if (info.diag) $('diagCount').textContent = info.diag.count;
+  renderDiagReport();
   $('recElsewhere').hidden = !info.recordingElsewhere;
   if (info.recording) $('recCount').textContent = info.recording.count;
 
@@ -383,7 +386,8 @@ async function init() {
   const { popupShowAll } = await chrome.storage.local.get('popupShowAll');
   $('showAll').checked = !!popupShowAll;
   await refresh();
-  setInterval(() => { if (info?.recording || info?.running || Date.now() - startedAt < 3000) refresh(); }, 500);
+  await loadDiagReport();
+  setInterval(() => { if (info?.recording || info?.running || info?.diag || Date.now() - startedAt < 3000) refresh(); }, 500);
 }
 
 $('error').querySelector('.msg-close').addEventListener('click', () => showError(''));
@@ -415,6 +419,75 @@ $('dumpScreen').addEventListener('click', async () => {
   $('lastRun').className = 'msg ok';
   $('lastRun').querySelector('.msg-text').textContent = '✔ Schermopbouw gekopieerd — plak het in de chat.';
   $('lastRun').hidden = false;
+});
+
+// ---------------------------------------------------------------- nauwkeurige opname
+
+let diagReportInfo = null;
+let diagReportHidden = false;
+
+async function loadDiagReport() {
+  const st = await send({ type: 'diagStatus' });
+  diagReportInfo = st?.report || null;
+  renderDiagReport();
+}
+
+function renderDiagReport() {
+  const show = !!diagReportInfo && !diagReportHidden && !info?.diag;
+  $('diagReport').hidden = !show;
+  if (show) {
+    $('diagReportInfo').textContent = `${new Date(diagReportInfo.time).toLocaleString('nl-NL')} — ${diagReportInfo.events} gebeurtenissen. Download het bestand en stuur het mee in de chat.`;
+  }
+}
+
+function downloadText(name, text, mime = 'text/plain') {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: mime + ';charset=utf-8' }));
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+const stamp = () => new Date(diagReportInfo?.time || Date.now()).toISOString().slice(0, 16).replace(/[:T]/g, '-');
+
+$('diagStart').addEventListener('click', async () => {
+  const res = await send({ type: 'diagStart', tabId });
+  if (!res?.ok) return showError(res?.error || 'Starten mislukt (ververs BluJay en probeer opnieuw).');
+  showError('');
+  startedAt = Date.now() + 10 * 60 * 1000;
+  refresh();
+});
+$('diagStop').addEventListener('click', async () => {
+  $('diagStop').disabled = true;
+  const res = await send({ type: 'diagStop', save: true });
+  $('diagStop').disabled = false;
+  if (!res?.ok) return showError(res?.error || 'Stoppen mislukt');
+  startedAt = 0;
+  diagReportHidden = false;
+  await refresh();
+  await loadDiagReport();
+});
+$('diagCancel').addEventListener('click', async () => {
+  await send({ type: 'diagStop', save: false });
+  startedAt = 0;
+  refresh();
+});
+$('diagReportClose').addEventListener('click', () => { diagReportHidden = true; renderDiagReport(); });
+$('diagDownload').addEventListener('click', async () => {
+  const r = await send({ type: 'diagReport' });
+  if (r) downloadText(`blujay-opname-${stamp()}.txt`, r.text);
+});
+$('diagJson').addEventListener('click', async () => {
+  const r = await send({ type: 'diagReport' });
+  if (r) downloadText(`blujay-opname-${stamp()}.json`, r.json, 'application/json');
+});
+$('diagCopy').addEventListener('click', async () => {
+  const r = await send({ type: 'diagReport' });
+  if (!r) return;
+  await navigator.clipboard.writeText(r.text);
+  $('diagCopied').textContent = '✔ Gekopieerd';
+  setTimeout(() => { $('diagCopied').textContent = ''; }, 3000);
 });
 
 const openOptions = () => chrome.runtime.openOptionsPage();

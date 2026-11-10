@@ -110,6 +110,10 @@ Extra ref. → Afzender → Laadadres → Laaddatum/van/tot → Konditie(/plaats
 → Losdatum/van/tot → Losref → Enter). Springt de cursor uit het dossierscherm, dan stopt hij zonder te typen.
 Na elk veld controleert hij of de waarde er goed in staat.
 
+**Nauwkeurige opname (voor analyse):** *Extra → Nauwkeurige opname*. Werk daarna gewoon in BluJay; elke toets, klik,
+cursorverplaatsing (met het label van het veld), waardewijziging en elk geladen scherm wordt vastgelegd, ook
+"cursor bleef staan" na een Tab bij een verplicht veld. Klik *Stoppen & rapport maken* en kies *Downloaden (.txt)*.
+
 **Hulp nodig?** Na een mislukte actie: *📋 Details kopiëren* in het paneel. Voor de opbouw van een scherm:
 *Extra → Schermopbouw kopiëren*. Plak het resultaat in de chat met de ontwikkelaar.
 

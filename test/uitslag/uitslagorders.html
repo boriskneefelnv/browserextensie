@@ -139,6 +139,10 @@ if (parent.location.hash === '#valkuil') {
     if (e.key === 'Tab') { e.preventDefault(); parent.document.getElementById('rol').focus(); }
   });
 }
+// Referentie is verplicht: leeg kun je niet verder tabben.
+document.addEventListener('keydown', (e) => {
+  if (e.target.id === 'ref' && e.key === 'Tab' && !e.target.value) e.preventDefault();
+}, true);
 $('losref').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.isTrusted) log('opgeslagen'); });
 $('palsoort').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.isTrusted) log('pallets opgeslagen'); });
 $('menuBtn').addEventListener('click', () => { $('menu').style.display = 'block'; });
