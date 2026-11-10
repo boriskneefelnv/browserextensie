@@ -277,6 +277,13 @@ async function cdpKey(tabId, name) {
   await cdp(tabId, 'Input.dispatchKeyEvent', { type: 'keyUp', key, code: k.code, windowsVirtualKeyCode: k.keyCode, nativeVirtualKeyCode: k.keyCode });
 }
 
+async function cdpClick(tabId, x, y) {
+  const base = { x: Math.round(x), y: Math.round(y), button: 'left', clickCount: 1 };
+  await cdp(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: base.x, y: base.y });
+  await cdp(tabId, 'Input.dispatchMouseEvent', { ...base, type: 'mousePressed', buttons: 1 });
+  await cdp(tabId, 'Input.dispatchMouseEvent', { ...base, type: 'mouseReleased', buttons: 0 });
+}
+
 async function cdpText(tabId, text) {
   for (const ch of text) {
     const kc = /[a-z0-9]/i.test(ch) ? ch.toUpperCase().charCodeAt(0) : ch === ' ' ? 32 : 0;
@@ -520,7 +527,13 @@ async function runStep(ctrl, step, vars, settings, label) {
 
     if (res.value && res.value.__clickTag) {
       const t = Date.now();
-      await clickTagged(where.tabId, where.frameId, res.value.__clickTag);
+      const v = res.value;
+      if (ctrl.realKeys && v.coordsOk && (await cdpAttach(ctrl, where.tabId))) {
+        // Echte muisklik op de plek van het element (BluJay reageert niet altijd op nagebootste klikken).
+        await cdpClick(where.tabId, v.x, v.y);
+      } else {
+        await clickTagged(where.tabId, where.frameId, v.__clickTag);
+      }
       await waitForNavigations(ctrl, t);
       return;
     }

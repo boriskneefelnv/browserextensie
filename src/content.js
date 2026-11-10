@@ -252,9 +252,9 @@
     if (m) { text = m[1]; nth = Math.max(1, Number(m[2])); }
     const wanted = core(text);
     const wantedLower = norm(text).toLowerCase().replace(/[:*]\s*$/, '');
-    const anchors = findTextAnchors(text).filter(isVisible);
+    // Alleen een label dat PRECIES de tekst is (dus niet "Levellen van zendingen" bij "Zending").
     const exact = (a) => core(a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement ? a.value : directText(a)) === wanted;
-    anchors.sort((a, b) => exact(b) - exact(a));
+    const anchors = findTextAnchors(text).filter(isVisible).filter(exact);
     for (const a of anchors) {
       const L = labelRect(a, wantedLower);
       if (!L.height) continue;
@@ -520,6 +520,36 @@
     return norm(el.innerText ?? el.textContent);
   }
 
+  /**
+   * Klik voorbereiden: element markeren en het midden ervan bepalen (in coördinaten van het hele
+   * tabblad, ook als het in een frame staat). De klik zelf doet de achtergrond: als echte muisklik
+   * (via de debugger) of, als dat niet kan, in de pagina-context.
+   */
+  function markForClick(el) {
+    el.scrollIntoView({ block: 'center', inline: 'center' });
+    const tag = Math.random().toString(36).slice(2);
+    el.setAttribute('data-ba-click', tag);
+    setTimeout(() => el.removeAttribute('data-ba-click'), 5000);
+    const r = el.getBoundingClientRect();
+    let x = r.left + Math.min(r.width / 2, 40);
+    let y = r.top + r.height / 2;
+    let coordsOk = r.width > 0 && r.height > 0;
+    try {
+      let w = window;
+      while (w !== w.top) {
+        const fe = w.frameElement;
+        if (!fe) { coordsOk = false; break; }
+        const fr = fe.getBoundingClientRect();
+        x += fr.left + fe.clientLeft;
+        y += fr.top + fe.clientTop;
+        w = w.parent;
+      }
+    } catch {
+      coordsOk = false; // frame van een ander domein: positie niet te bepalen
+    }
+    return { __clickTag: tag, x, y, coordsOk };
+  }
+
   /** Zet de cursor in het veld (en selecteert de inhoud) zodat de achtergrond echte toetsaanslagen kan sturen. */
   function focusForKeys(el, selectAll) {
     el.scrollIntoView({ block: 'center' });
@@ -544,15 +574,8 @@
     if (!el) throw new Error(`element niet gevonden: ${step.selector}`);
     if (step.type !== 'read') flash(el);
     switch (step.type) {
-      case 'click': {
-        // De klik zelf gebeurt via de achtergrond in de pagina-context ("MAIN world"),
-        // zodat ook links met href="javascript:..." werken. Hier alleen markeren.
-        el.scrollIntoView({ block: 'center', inline: 'center' });
-        const tag = Math.random().toString(36).slice(2);
-        el.setAttribute('data-ba-click', tag);
-        setTimeout(() => el.removeAttribute('data-ba-click'), 5000);
-        return { __clickTag: tag };
-      }
+      case 'click':
+        return markForClick(el);
       case 'type':
         if (step.realKeys) return focusForKeys(el, true);
         await typeText(el, step.value ?? '', !!step.slow);
@@ -562,7 +585,7 @@
         return;
       case 'check': {
         const want = !/^(uit|nee|false|0|off|no)$/i.test(String(step.value || 'aan').trim());
-        if (!!el.checked !== want) doClick(el);
+        if (!!el.checked !== want) return markForClick(el);
         return;
       }
       case 'key':
