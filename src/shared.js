@@ -31,6 +31,7 @@ var BA = (() => {
     text: 'Tekst',
     month: 'Maand + jaar',
     date: 'Datum',
+    time: 'Tijd',
   };
 
   const TRIGGER_TYPES = {
@@ -158,6 +159,8 @@ var BA = (() => {
       description: m.description || '',
       urlPattern: m.urlPattern ?? '',
       stepDelay: m.stepDelay ?? null,
+      realKeys: !!m.realKeys,
+      pdf: !!m.pdf,
       inputs: Array.isArray(m.inputs) ? m.inputs : [],
       triggers: Array.isArray(m.triggers) ? m.triggers : [],
       steps: Array.isArray(m.steps) ? m.steps : [],

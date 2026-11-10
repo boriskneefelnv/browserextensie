@@ -206,6 +206,72 @@ async function test(name, fn) {
     assert.deepStrictEqual(await dossierValues(), ['1', '99999', '1', '99', '60WH', '60WH', '26/01', '26/12', 'X1', 'X1', '1', '999999999999999', 'J', 'Klaar']);
   });
 
+  // ------------------------------------------------------------ Uitslagdossier (PDF)
+  await test('Paklijst (PDF) inlezen in het paneel: klant herkennen en velden vullen', async () => {
+    await sw.evaluate((presets) => chrome.storage.local.set({ macros: presets, settings: { stepDelay: 30, timeout: 5000 } }), await sw.evaluate(() => PRESETS));
+    const extId = new URL(sw.url()).host;
+    const panel = await context.newPage();
+    await panel.goto(`chrome-extension://${extId}/src/popup/popup.html`);
+    const card = panel.locator('.macro', { hasText: 'Uitslagdossier aanmaken' });
+    await card.locator('input[type=file]').setInputFiles(path.join(__dirname, 'fixtures/paklijst-topbrands-test.pdf'));
+    await card.locator('.pdfstatus.ok').waitFor({ timeout: 15000 });
+    const val = (n) => card.locator(`input[data-name="${n}"]`).inputValue();
+    assert.match(await card.locator('.pdfstatus').textContent(), /Top Brands → Voorbeeld Retail GmbH \(DE\), Teststadt/);
+    assert.strictEqual(await val('opdrachtgever'), 'TOPBROUD');
+    assert.strictEqual(await val('referentie'), '26SO999-000123');
+    assert.strictEqual(await val('losref'), '7654321');
+    assert.strictEqual(await val('pallets'), '21');
+    assert.strictEqual(await val('palletsoort'), 'EP');
+    assert.strictEqual(await val('plaats'), 'Teststadt');
+    assert.strictEqual(await val('konditie'), 'DDP');
+    assert.strictEqual(await val('laadadres'), 'NEELEMAA3');
+    assert.strictEqual(await val('ontvanger'), '', 'onbekende afnemer hoort leeg te zijn');
+    // Ontbrekende ontvanger-code wordt na invullen onthouden voor dit klantnummer
+    await card.locator('input[data-name="ontvanger"]').fill('testontv');
+    for (const [n, v] of [['laaddatum', '2026-10-05'], ['laadtijd_van', '08:00'], ['losdatum', '2026-10-07'], ['lostijd_van', '14:00']]) {
+      await card.locator(`input[data-name="${n}"]`).fill(v);
+    }
+    await card.locator('button', { hasText: 'Uitvoeren' }).click();
+    await panel.waitForTimeout(500);
+    const codes = await sw.evaluate(async () => (await chrome.storage.local.get('ontvangerCodes')).ontvangerCodes);
+    assert.deepStrictEqual(codes, { K9999999: 'TESTONTV' });
+    await sw.evaluate(() => { for (const c of running.values()) c.stopped = true; });
+    await panel.waitForTimeout(500);
+    // Tweede keer: code wordt automatisch ingevuld
+    await panel.reload();
+    const card2 = panel.locator('.macro', { hasText: 'Uitslagdossier aanmaken' });
+    await card2.locator('input[type=file]').setInputFiles(path.join(__dirname, 'fixtures/paklijst-topbrands-test.pdf'));
+    await card2.locator('.pdfstatus.ok').waitFor({ timeout: 15000 });
+    assert.strictEqual(await card2.locator('input[data-name="ontvanger"]').inputValue(), 'TESTONTV');
+    await panel.close();
+  });
+
+  await test('Uitslagdossier aanmaken — volledige flow met echte toetsaanslagen', async () => {
+    const up = await context.newPage();
+    await up.goto(`${base}/uitslag/index.html`);
+    await up.frameLocator('#side').locator('text=Inslag').waitFor();
+    await up.waitForTimeout(400);
+    await sw.evaluate((presets) => chrome.storage.local.set({ macros: presets, settings: { stepDelay: 30, timeout: 5000 } }), await sw.evaluate(() => PRESETS));
+    const id = await sw.evaluate(async (url) => (await chrome.tabs.query({ url }))[0].id, `${base}/uitslag/index.html`);
+    const vars = {
+      laaddatum: '2026-09-11', laadtijd_van: '08:00', laadtijd_tot: '', losdatum: '2026-09-14', lostijd_van: '14:00', lostijd_tot: '',
+      opdrachtgever: 'TOPBROUD', referentie: '26SO270-011129', extraref: '', laadadres: 'NEELEMAA3', konditie: 'DDP', plaats: 'Biblis',
+      ontvanger: 'ACTIOBIB', losadres: '', losref: '2031479', pallets: '33', palletsoort: 'EP', instructie: 'Laden in de lengte',
+    };
+    const res = await sw.evaluate(({ id, vars }) => runMacro(id, 'uitslagdossier', vars, 'test'), { id, vars });
+    const main = up.frames().find((f) => f.url().endsWith('/uitslagorders.html'));
+    const v = main ? await main.evaluate(() => Object.fromEntries([...document.querySelectorAll('input')].map((i) => [i.id, i.value]))) : {};
+    const extra = main ? await main.evaluate(() => ({ status: document.getElementById('status').textContent, instr: document.getElementById('instrSaved').textContent })) : {};
+    assert.ok(res.ok, res.error + ' | ' + JSON.stringify(extra));
+    assert.deepStrictEqual(
+      [v.afh, v.soort, v.opdr, v.ref, v.extra, v.afz, v.laadadres, v.laaddat, v.laadvan, v.laadtot, v.kond, v.kondplaats, v.laadref, v.ontv, v.losadres, v.losdat, v.losvan, v.lostot, v.losref, v.pal, v.palsoort],
+      ['u', 'd', 'TOPBROUD', '26SO270-011129', '', 'TOPBROUD', 'NEELEMAA3', '11-09-26', '08:00', '08:00', 'DDP', 'Biblis', '60123456', 'ACTIOBIB', 'ACTIOBIB', '14-09-26', '14:00', '14:00', '2031479', '33', 'EP']
+    );
+    assert.match(extra.status, /dossier aangemaakt.*opgeslagen/);
+    assert.strictEqual(extra.instr, 'instructie: Laden in de lengte');
+    await up.close();
+  });
+
   await context.close();
   server.close();
   console.log(failures ? `\n${failures} test(s) mislukt` : '\nAlle tests geslaagd');

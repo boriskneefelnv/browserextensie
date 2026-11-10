@@ -64,19 +64,87 @@ function monthText(v) {
   return m ? `${MONTHS[Number(m[2]) - 1]} ${m[1]}` : v;
 }
 
+const PDF_BASE = chrome.runtime.getURL('src/lib/pdfjs/');
+
+async function readPdf(file, box, m, status) {
+  status.className = 'pdfstatus';
+  status.textContent = `"${file.name}" lezen…`;
+  try {
+    const data = new Uint8Array(await file.arrayBuffer());
+    const { text, lines } = await BAPdf.extract(data, PDF_BASE);
+    const { ontvangerCodes = {} } = await chrome.storage.local.get('ontvangerCodes');
+    const { klant, waarden } = BAParsers.parse(text, lines, ontvangerCodes);
+    if (!klant) {
+      status.className = 'pdfstatus fail';
+      status.textContent = `✖ Klant niet herkend in "${file.name}". Deze klant is nog niet ingesteld.`;
+      return;
+    }
+    // Velden uit de paklijst (opnieuw) vullen; datums/tijden die je al had ingevuld blijven staan.
+    for (const inp of m.inputs) {
+      const input = box.querySelector(`input[data-name="${inp.name}"]`);
+      if (!input) continue;
+      if (Object.prototype.hasOwnProperty.call(waarden, inp.name)) input.value = waarden[inp.name] ?? '';
+      else if (!['date', 'time'].includes(inp.type)) input.value = BA.fillTemplate(inp.default || '', BA.builtinVars());
+      input.classList.toggle('missing', !!inp.required && !input.value);
+    }
+    box.dataset.klantnummer = waarden.klantnummer || '';
+    const ontbreekt = m.inputs.filter((i) => i.required && !['date', 'time'].includes(i.type) && !waarden[i.name]).map((i) => i.label);
+    status.className = 'pdfstatus ok';
+    status.textContent = `✔ ${klant.naam}${waarden.afnemer ? ' → ' + waarden.afnemer : ''}  ·  ${file.name}` +
+      (ontbreekt.length ? `\n⚠ Niet gevonden, vul zelf in: ${ontbreekt.join(', ')}` : '');
+    const firstEmpty = [...box.querySelectorAll('input[data-required]')].find((i) => !i.value);
+    firstEmpty?.focus();
+  } catch (e) {
+    status.className = 'pdfstatus fail';
+    status.textContent = `✖ PDF lezen mislukt: ${e.message}`;
+  }
+}
+
 function renderMacro(m, isOther) {
   const inputs = m.inputs.filter((i) => i.name);
-  const fields = inputs.map((inp) => renderInput(m, inp));
-  const runBtn = el('button', { class: 'primary small', disabled: !!info.running || !!info.recording }, '▶ Uitvoeren');
+  const fields = [];
+  let section = null;
+  for (const inp of inputs) {
+    if (inp.section && inp.section !== section) {
+      section = inp.section;
+      fields.push(el('div', { class: 'sec full' }, section));
+    }
+    fields.push(renderInput(m, inp));
+  }
+  const runBtn = el('button', { class: 'primary small' }, '▶ Uitvoeren');
   const summary = el('p', { class: 'summary' });
+  const showSummary = inputs.length > 0 && inputs.length <= 4;
+
+  let pdfZone = null;
+  let pdfStatus = null;
+  if (m.pdf) {
+    const file = el('input', { type: 'file', accept: 'application/pdf,.pdf', hidden: true });
+    pdfStatus = el('p', { class: 'pdfstatus' });
+    pdfZone = el('div', { class: 'drop', tabindex: '0' }, '📄 Sleep de paklijst (PDF) hierheen', el('br'), el('span', {}, 'of klik om een bestand te kiezen'), file);
+    pdfZone.addEventListener('click', () => file.click());
+    pdfZone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') file.click(); });
+    pdfZone.addEventListener('dragover', (e) => { e.preventDefault(); pdfZone.classList.add('over'); });
+    pdfZone.addEventListener('dragleave', () => pdfZone.classList.remove('over'));
+    pdfZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      pdfZone.classList.remove('over');
+      const f = e.dataTransfer.files[0];
+      if (f) readPdf(f, box, m, pdfStatus);
+    });
+    file.addEventListener('change', () => { if (file.files[0]) readPdf(file.files[0], box, m, pdfStatus); file.value = ''; });
+  }
+
   const box = el('div', { class: 'macro' + (isOther ? ' other' : '') },
     el('div', { class: 'macro-head' }, el('strong', {}, m.name), runBtn),
     m.description ? el('p', { class: 'desc' }, m.description) : null,
     m.triggers.some((t) => t.enabled !== false && t.selector) ? el('div', { class: 'auto' }, '⚡ start ook automatisch') : null,
+    pdfZone,
+    pdfStatus,
     fields.length ? el('div', { class: 'inputs' }, ...fields) : null,
-    fields.length ? summary : null
+    showSummary ? summary : null
   );
   const updateSummary = () => {
+    if (!showSummary) return;
     const parts = [];
     for (const input of box.querySelectorAll('input[data-name]')) {
       const v = input.value.trim();
@@ -92,18 +160,38 @@ function renderMacro(m, isOther) {
       return showError(e.message);
     }
     showError('');
+    // Ontvanger-code onthouden voor dit klantnummer (volgende keer automatisch ingevuld).
+    if (box.dataset.klantnummer && vars.ontvanger) {
+      const { ontvangerCodes = {} } = await chrome.storage.local.get('ontvangerCodes');
+      ontvangerCodes[box.dataset.klantnummer] = vars.ontvanger.toUpperCase();
+      await chrome.storage.local.set({ ontvangerCodes });
+    }
     const res = await send({ type: 'runMacro', tabId, macroId: m.id, vars });
     if (!res?.ok) return showError(res?.error || 'Starten mislukt');
     startedAt = Date.now();
-    setTimeout(refresh, 300); // popup blijft open en toont de voortgang
+    setTimeout(refresh, 300); // paneel blijft open en toont de voortgang
   };
   runBtn.addEventListener('click', run);
   box.querySelectorAll('input[data-name]').forEach((i) => {
     i.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
-    i.addEventListener('input', updateSummary);
+    i.addEventListener('input', () => { updateSummary(); i.classList.remove('missing'); });
   });
   updateSummary();
-  return box;
+  return { box, runBtn };
+}
+
+// Kaarten hergebruiken bij verversen, zodat ingevulde waarden niet verdwijnen.
+const cards = new Map(); // macroId -> { json, box, runBtn }
+
+function card(m, isOther) {
+  const json = JSON.stringify(m) + isOther;
+  let c = cards.get(m.id);
+  if (!c || c.json !== json) {
+    c = { json, ...renderMacro(m, isOther) };
+    cards.set(m.id, c);
+  }
+  c.runBtn.disabled = !!info.running || !!info.recording;
+  return c.box;
 }
 
 function render() {
@@ -116,8 +204,8 @@ function render() {
       ? 'Geen handelingen voor deze pagina.'
       : 'Nog geen handelingen. Neem er hieronder een op, of maak er een via ⚙.'));
   }
-  matching.forEach((m) => list.append(renderMacro(m, false)));
-  if ($('showAll').checked) others.forEach((m) => list.append(renderMacro(m, true)));
+  matching.forEach((m) => list.append(card(m, false)));
+  if ($('showAll').checked) others.forEach((m) => list.append(card(m, true)));
 
   const running = info.running ? info.macros.find((m) => m.id === info.running) : null;
   $('runningBox').hidden = !running;
@@ -197,5 +285,9 @@ $('pick').addEventListener('click', async () => {
   await send({ type: 'startPicker', tabId });
   startedAt = Date.now() + 20000; // even blijven verversen om het gekozen element te tonen
 });
+
+// Een PDF die naast het vak wordt losgelaten niet in het paneel openen.
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => e.preventDefault());
 
 init().catch((e) => showError(e.message));

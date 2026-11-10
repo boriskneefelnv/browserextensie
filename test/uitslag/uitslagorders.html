@@ -1,0 +1,79 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+ body{font:12px Verdana;margin:0}
+ .tab{background:#2a5d8f;color:#fff;padding:4px 12px;display:inline-block}
+ .bar a{margin-right:10px;cursor:pointer;color:#123}
+ table{border-collapse:collapse;margin:6px} td{padding:2px 4px}
+ input{font:12px Verdana;border:1px solid #889;width:110px} input.s{width:42px}
+ input:disabled,input[readonly]{background:#e8e8e8}
+ #menu{display:none;position:absolute;background:#fff;border:1px solid #999;top:45px;left:70px}
+ #menu div{padding:3px 10px;cursor:pointer} #sub{display:none;position:absolute;left:150px;top:0;background:#fff;border:1px solid #999}
+ #instr{display:none;position:absolute;top:120px;left:300px;background:#ffe;border:2px solid #777;padding:10px}
+</style></head>
+<body>
+<div class="tab" id="tabkop">Nieuw dossier</div>
+<div class="bar" id="bar" style="display:none;padding:4px">
+  <a id="menuBtn">Menu &#9662;</a><a>Artikelregels</a><a>Goederenregels</a><a>Dossiermutaties</a>
+</div>
+<div id="menu">
+  <div>Artikelregels</div>
+  <div id="omschr">Omschrijvingen &#9656;
+    <div id="sub"><div>Instructies overig</div><div id="instrItem">Instructies uitslag</div><div>Opmerkingen</div></div>
+  </div>
+</div>
+<div id="instr">Instructies uitslag<br><textarea id="instrText" rows="3" cols="30"></textarea><div id="instrSaved"></div></div>
+
+<table id="kop">
+ <tr><td>Zending</td><td><input id="afd" value="" autofocus></td><td><input id="afd2" class="s"></td></tr>
+</table>
+<table id="nieuw" style="display:none">
+ <tr><td>Afh.code</td><td><input id="afh" class="s" value="i"></td><td>Soort</td><td><input id="soort" class="s" value="d"></td></tr>
+ <tr><td>Opdrachtgever</td><td><input id="opdr"></td><td><input id="opdr2" class="s"></td></tr>
+</table>
+<table id="dossier">
+ <tr><td>Referentie</td><td><input id="ref" disabled></td><td>Extra ref.</td><td><input id="extra" disabled></td></tr>
+ <tr><td>Afzender</td><td><input id="afz" disabled></td></tr>
+ <tr><td>Laadadres</td><td><input id="laadadres" disabled></td></tr>
+ <tr><td>Laaddatum</td><td><input id="laaddat" class="s" disabled><input id="laadvan" class="s" disabled><input id="laadtot" class="s" disabled></td></tr>
+ <tr><td>Konditie</td><td><input id="kond" class="s" disabled><input id="kondplaats" disabled></td></tr>
+ <tr><td>Vervoerder</td><td><input id="verv" disabled></td></tr>
+ <tr><td>Laadref</td><td><input id="laadref" disabled></td></tr>
+ <tr><td>Ontvanger</td><td><input id="ontv" disabled></td></tr>
+ <tr><td>Losadres</td><td><input id="losadres" disabled></td></tr>
+ <tr><td>Losdatum</td><td><input id="losdat" class="s" disabled><input id="losvan" class="s" disabled><input id="lostot" class="s" disabled></td></tr>
+ <tr><td>Losref</td><td><input id="losref" disabled></td></tr>
+ <tr><td>Aantal Pallets</td><td><input id="pal" class="s" disabled><input id="palsoort" class="s" disabled></td></tr>
+</table>
+<p id="status"></p>
+<div style="margin-top:300px"><a>Menu</a> (ander menu, ver weg)</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const log = (t) => { $('status').textContent += '[' + t + ']'; };
+// Alleen ECHTE toetsaanslagen tellen voor de "Tab"-logica, zoals in een terminal-achtig systeem.
+$('afd').addEventListener('keydown', (e) => {
+  if (e.key === 'Tab' && $('afd').value.toUpperCase() === '60WH') setTimeout(() => { $('nieuw').style.display = ''; }, 200);
+});
+$('afd2').addEventListener('keydown', (e) => { if (e.key === 'Tab') { e.preventDefault(); $('afh').focus(); } });
+let tabsNaOpdr = 0;
+$('opdr').addEventListener('keydown', (e) => { if (e.key === 'Tab') tabsNaOpdr = 1; });
+$('opdr2').addEventListener('keydown', (e) => {
+  if (e.key === 'Tab' && tabsNaOpdr === 1 && $('opdr').value === 'TOPBROUD' && $('afh').value === 'u') {
+    e.preventDefault();
+    setTimeout(() => {
+      document.querySelectorAll('#dossier input').forEach((i) => (i.disabled = false));
+      $('afz').value = $('opdr').value;
+      $('tabkop').textContent = 'Dossiernummer 60123456';
+      $('bar').style.display = '';
+      $('ref').focus();
+      log('dossier aangemaakt');
+    }, 600);
+  }
+});
+$('losref').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.isTrusted) log('opgeslagen'); });
+$('menuBtn').addEventListener('click', () => { $('menu').style.display = 'block'; });
+$('omschr').addEventListener('mouseover', () => { $('sub').style.display = 'block'; });
+$('instrItem').addEventListener('click', (e) => { e.stopPropagation(); $('menu').style.display = 'none'; $('instr').style.display = 'block'; $('instrText').focus(); });
+$('instrText').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('instrSaved').textContent = 'instructie: ' + $('instrText').value; } });
+</script>
+</body></html>

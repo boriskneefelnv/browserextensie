@@ -145,6 +145,10 @@ function renderMacro(main, m) {
         el('label', { class: 'f' }, el('span', {}, 'Wachttijd tussen stappen (ms, leeg = standaard)'), bind(m, 'stepDelay', { type: 'number', min: 0, placeholder: String(state.settings.stepDelay) }))
       ),
       el('label', { class: 'f' }, el('span', {}, 'Omschrijving'), bind(m, 'description', { placeholder: 'Wat doet deze handeling?' })),
+      el('div', { class: 'checks', style: 'margin-bottom:10px' },
+        bindCheck(m, 'realKeys', ' Echte toetsaanslagen gebruiken (aanbevolen voor BluJay; tijdens de handeling toont de browser een "foutopsporing"-balk)'),
+        bindCheck(m, 'pdf', ' Paklijst (PDF) laten inlezen in het paneel')
+      ),
       el('label', { class: 'f' },
         el('span', {}, 'Werkt op pagina\'s (URL-patroon, * = joker, meerdere scheiden met komma; leeg = overal)'),
         bind(m, 'urlPattern', { class: 'mono', placeholder: 'https://*.blujaysolutions.net/*' }))
@@ -284,9 +288,12 @@ function renderStepRow(tbody, m, s, i, rerender) {
         el('td', { colspan: 5 },
           el('div', { class: 'grid' },
             def.variable && def.value ? lbl('Variabele', bind(s, 'variable', { class: 'mono' })) : null,
-            lbl('Alleen als (voorwaarde)', bind(s, 'when', { class: 'mono', placeholder: '{{status}} == Gepland' })),
+            lbl('Alleen als (voorwaarde)', bind(s, 'when', { class: 'mono', placeholder: '{{status}} == Gepland  /  !bestaat: text=X' })),
             def.selector ? lbl('Frame (deel van URL)', bind(s, 'frame', { class: 'mono', placeholder: 'automatisch' })) : null,
             def.selector ? lbl('Time-out (ms)', bind(s, 'timeout', { type: 'number', placeholder: String(state.settings.timeout) })) : null,
+            def.selector ? lbl('Dichtst bij tekst', bind(s, 'near', { placeholder: 'bijv. Artikelregels' })) : null,
+            def.selector ? lbl('Alleen in frame met tekst', bind(s, 'frameText', { placeholder: '(optioneel)' })) : null,
+            s.type === 'read' ? lbl('Patroon (regex, 1e groep)', bind(s, 'pattern', { class: 'mono', placeholder: '(\\d{6,})' })) : null,
             el('div', { class: 'checks' },
               bindCheck(s, 'optional', 'Optioneel (overslaan als het mislukt)'),
               s.type === 'type' ? bindCheck(s, 'slow', 'Letter voor letter typen') : null,

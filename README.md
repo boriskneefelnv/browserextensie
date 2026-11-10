@@ -44,6 +44,34 @@ Daarna bevestigt hij:
 | 5 | Wacht tot onderin *Uw keuze : 99 — ( 99/ok = Akkoord, 00 = Afbreken )* verschijnt |
 | 6 | Zet daar `99` en drukt nog eens **Enter** — klaar |
 
+## Ingebouwde handeling: Uitslagdossier aanmaken (vanuit paklijst-PDF)
+
+1. Open BluJay en het zijpaneel (⚡ of **Alt+B**).
+2. Sleep de **paklijst (PDF)** in het vak bij *Uitslagdossier aanmaken* (of klik erop om te kiezen).
+   De klant wordt herkend (nu: **Top Brands → TOPBROUD**) en de velden worden ingevuld.
+3. Vul **laaddatum + laadtijd** en **losdatum + lostijd** in (tijd *tot* leeg = zelfde als *van*). Controleer de rest.
+4. Klik **▶ Uitvoeren**. Hij doet dan:
+   Uitslag → Uitslagorders → `60WH` Tab Tab → Afh.code `u` → Opdrachtgever → Tab Tab (dossier wordt gemaakt)
+   → Referentie, Laadadres, Laaddatum/-tijden, Konditie + plaats, **Laadref = nieuw dossiernummer**, Ontvanger, Losadres,
+   Losdatum/-tijden, Losref → Enter → Aantal pallets (bijv. 33 EP) → Menu → Omschrijvingen → Instructies uitslag
+   → "Laden in de lengte" + Enter.
+
+| Uit de paklijst (Top Brands) | Dossierveld |
+|---|---|
+| *Order No.* | Referentie |
+| *SHIP ID* | Losref |
+| "33 pallets" | Aantal pallets (33 + EP) |
+| plaats van de afnemer | plaats achter Konditie |
+| klantnummer afnemer (bijv. K1300650) | Ontvanger/Losadres (bijv. ACTIOBIB) |
+| vast voor Top Brands | Laadadres NEELEMAA3, Konditie DDP, instructie "Laden in de lengte" |
+
+Kent hij de ontvanger-code van een afnemer nog niet, dan blijft dat veld leeg (rood). Vul hem één keer in;
+daarna onthoudt hij hem voor dat klantnummer.
+
+**Echte toetsaanslagen:** deze handelingen typen zoals jij dat doet (ook Tab en Enter). De browser toont tijdens
+de handeling een balk *"BluJay Assistent is foutopsporing gestart"*. Dat is normaal en verdwijnt als hij klaar is
+(niet op *Annuleren* klikken, dan stopt hij met echte toetsaanslagen).
+
 ## Installeren (eenmalig)
 
 1. Download deze map (*Code → Download ZIP*) en pak hem uit, bijv. naar `Documenten\blujay-assistent`.

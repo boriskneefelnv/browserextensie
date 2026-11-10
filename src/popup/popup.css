@@ -43,3 +43,12 @@ input[type=text] { width: 100%; font: inherit; padding: 6px 8px; border: 1px sol
 .lastrun.fail { background: #fdecea; color: #b71c1c; }
 .inputs > div { min-width: 0; }
 .inputs input { min-width: 0; max-width: 100%; }
+.sec { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #0b3d6b; margin-top: 8px; border-bottom: 1px solid #e1e5ea; padding-bottom: 2px; }
+.drop { margin-top: 8px; border: 2px dashed #90a4bb; border-radius: 8px; padding: 14px 10px; text-align: center; color: #0b3d6b; font-weight: 600; cursor: pointer; background: #f4f8fc; }
+.drop span { font-weight: normal; color: #5b6878; font-size: 12px; }
+.drop.over { background: #e3f0fd; border-color: #1565c0; }
+.pdfstatus { margin: 6px 0 0; font-size: 12px; white-space: pre-line; }
+.pdfstatus:empty { display: none; }
+.pdfstatus.ok { color: #1b5e20; }
+.pdfstatus.fail { color: #b71c1c; font-weight: 600; }
+.inputs input.missing { border-color: #e57373; background: #fff6f6; }

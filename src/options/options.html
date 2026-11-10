@@ -44,6 +44,8 @@
       <li><code>text=Opslaan</code> — knop/link/cel met precies die tekst</li>
       <li><code>label=Ordernummer</code> — invoerveld naast/onder dat label</li>
       <li><code>field=van_periode</code> — eerste invulveld ná die tekst (handig voor schermen zonder echte labels, zoals het selectiescherm van Dossiermutaties)</li>
+      <li><code>field=Laaddatum [2]</code> — het 2e invulveld ná die tekst (bijv. de begintijd)</li>
+      <li><code>focus</code> — het veld waar de cursor nu staat</li>
       <li><code>xpath=//button[2]</code> — XPath</li>
       <li><code>text=Wijzigen &gt;&gt; 1</code> — het 2e zichtbare element (tellen begint bij 0)</li>
     </ul>
@@ -52,7 +54,8 @@
     <p>Ingebouwd: <code>{{vandaag}}</code>, <code>{{morgen}}</code>, <code>{{gisteren}}</code> (dd-mm-jjjj), <code>{{tijd}}</code>, <code>{{nu}}</code>, <code>{{jaar}}</code>, <code>{{maand}}</code>.
       Opmaak met <code>|</code>: <code>{{van|JJ/MM}}</code> → 26/01, <code>{{van|MM-JJJJ}}</code> → 01-2026, <code>{{klant|hoofdletters}}</code>. Met de stap <em>Lees waarde</em> kun je een waarde van de pagina bewaren en later weer gebruiken.</p>
     <h3>Alleen als…</h3>
-    <p>Bij elke stap kun je een voorwaarde zetten, bijv. <code>{{status}} == Gepland</code>, <code>{{klant}} != </code>, <code>{{opmerking}} ~ spoed</code> (bevat). Combineer met de stap <em>Stop handeling</em> om af te breken.</p>
+    <p>Bij elke stap kun je een voorwaarde zetten, bijv. <code>{{status}} == Gepland</code>, <code>{{klant}} != </code>, <code>{{opmerking}} ~ spoed</code> (bevat). Combineer met de stap <em>Stop handeling</em> om af te breken.
+      Met <code>bestaat: text=Uitslagorders</code> of <code>!bestaat: text=Uitslagorders</code> voer je een stap alleen uit als een element wel/niet op het scherm staat.</p>
   </template>
 
   <script src="../shared.js"></script>

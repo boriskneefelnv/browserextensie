@@ -42,12 +42,16 @@
     'button, a, input[type=button], input[type=submit], input[type=reset], [role=button], [role=menuitem], ' +
     '[role=option], [role=tab], [role=link], [role=gridcell], label, li, td, th, span, div, option, h1, h2, h3, h4';
 
+  // Pijltjes/tekens aan begin en eind negeren ("Menu ▾", "Omschrijvingen ▸", "» Uitslag").
+  const core = (s) => norm(s).toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}.)]+$/gu, '');
+
   function findByText(text, root = document) {
-    const wanted = norm(text).toLowerCase();
+    const wanted = core(text);
+    if (!wanted) return [];
     const hits = [...root.querySelectorAll(TEXT_CANDIDATES)].filter((el) => {
       // Goedkope voorselectie (geen layout nodig) voordat innerText wordt opgevraagd.
       if (!(el instanceof HTMLInputElement) && !norm(el.textContent).toLowerCase().includes(wanted)) return false;
-      return ownText(el).toLowerCase() === wanted;
+      return core(ownText(el)) === wanted || (!(el instanceof HTMLInputElement) && core(directText(el)) === wanted);
     });
     // Alleen het diepste element houden (niet alle ouders met dezelfde tekst).
     return hits.filter((el) => !hits.some((o) => o !== el && el.contains(o)));
@@ -110,20 +114,36 @@
     return anchors;
   }
 
+  /** field=Laaddatum → 1e invulveld na de tekst; field=Laaddatum [2] → het 2e (bijv. begintijd). */
   function findByField(text) {
+    let nth = 1;
+    const m = text.match(/^(.*?)\s*\[(\d+)\]\s*$/);
+    if (m) { text = m[1]; nth = Math.max(1, Number(m[2])); }
     const out = [];
     for (const a of findTextAnchors(text)) {
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
       walker.currentNode = a;
       let n;
+      let count = 0;
       while ((n = walker.nextNode())) {
-        if (n.matches(EDITABLE) && isVisible(n)) {
+        if (n.matches(EDITABLE) && isVisible(n) && ++count === nth) {
           if (!out.includes(n)) out.push(n);
           break;
         }
       }
     }
     return out;
+  }
+
+  // Wanneer werd in dit frame voor het laatst een veld actief? (om tussen frames het juiste te kiezen)
+  let lastFocusAt = 0;
+  document.addEventListener('focusin', () => { lastFocusAt = Date.now(); }, true);
+
+  /** Het veld waar de cursor nu staat (in dit frame). */
+  function findFocused() {
+    const el = document.activeElement;
+    if (!el || !el.matches(EDITABLE)) return [];
+    return [el];
   }
 
   function findByXPath(xp) {
@@ -139,7 +159,8 @@
     const m = sel.match(/^(.*)>>\s*(\d+)$/s);
     if (m) { sel = m[1].trim(); index = Number(m[2]); }
     let list;
-    if (sel.startsWith('text=')) list = findByText(sel.slice(5));
+    if (/^(focus|actief veld|cursor)$/i.test(sel)) list = findFocused();
+    else if (sel.startsWith('text=')) list = findByText(sel.slice(5));
     else if (sel.startsWith('label=')) list = findByLabel(sel.slice(6));
     else if (sel.startsWith('field=')) list = findByField(sel.slice(6));
     else if (sel.startsWith('contains=')) list = findTextAnchors(sel.slice(9));
@@ -149,8 +170,19 @@
   }
 
   /** Geeft het eerste (bij voorkeur zichtbare) element terug. */
-  function find(selector, allowHidden = false) {
-    const { list, index } = findAll(selector);
+  function find(selector, allowHidden = false, near = '') {
+    let { list, index } = findAll(selector);
+    if (near) {
+      // Kies het element dat het dichtst bij de tekst "near" staat (bijv. Menu naast Artikelregels).
+      const anchors = findTextAnchors(near).filter(isVisible);
+      if (!anchors.length) return null;
+      const center = (e) => { const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+      const dist = (e) => {
+        const [x, y] = center(e);
+        return Math.min(...anchors.map((a) => { const [ax, ay] = center(a); return Math.hypot(ax - x, ay - y); }));
+      };
+      list = list.filter(isVisible).sort((a, b) => dist(a) - dist(b));
+    }
     if (index !== null) {
       const visible = list.filter(isVisible);
       const pool = visible.length > index ? visible : list;
@@ -360,8 +392,19 @@
     return norm(el.innerText ?? el.textContent);
   }
 
+  /** Zet de cursor in het veld (en selecteert de inhoud) zodat de achtergrond echte toetsaanslagen kan sturen. */
+  function focusForKeys(el, selectAll) {
+    el.scrollIntoView({ block: 'center' });
+    if (document.activeElement !== el && typeof el.focus === 'function') el.focus();
+    if (selectAll) {
+      if (typeof el.select === 'function') el.select();
+      else if (el.isContentEditable) document.getSelection()?.selectAllChildren(el);
+    }
+    return { __real: true, focused: document.activeElement === el, hadValue: 'value' in el ? el.value !== '' : !!el.textContent };
+  }
+
   async function exec(step) {
-    const el = find(step.selector, step.type === 'read');
+    const el = find(step.selector, step.type === 'read', step.near);
     if (!el) throw new Error(`element niet gevonden: ${step.selector}`);
     if (step.type !== 'read') flash(el);
     switch (step.type) {
@@ -375,6 +418,7 @@
         return { __clickTag: tag };
       }
       case 'type':
+        if (step.realKeys) return focusForKeys(el, true);
         await typeText(el, step.value ?? '', !!step.slow);
         return;
       case 'select':
@@ -386,6 +430,7 @@
         return;
       }
       case 'key':
+        if (step.realKeys) return focusForKeys(el, false);
         pressKey(el, step.value || 'Enter');
         return;
       case 'read':
@@ -655,8 +700,12 @@
     switch (msg.type) {
       case 'probe': {
         try {
-          const el = find(msg.selector, msg.allowHidden);
-          sendResponse({ found: !!el });
+          if (msg.frameText && !norm(document.body?.innerText).toLowerCase().includes(norm(msg.frameText).toLowerCase())) {
+            sendResponse({ found: false });
+            return false;
+          }
+          const el = find(msg.selector, msg.allowHidden, msg.near);
+          sendResponse({ found: !!el, focusAt: el && document.activeElement === el ? (document.hasFocus() ? Date.now() + 1e9 : lastFocusAt) : 0 });
         } catch (e) {
           sendResponse({ found: false, error: `ongeldige selector "${msg.selector}": ${e.message}` });
         }

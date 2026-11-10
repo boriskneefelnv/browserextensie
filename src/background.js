@@ -75,25 +75,46 @@ chrome.tabs.onCreated.addListener((tab) => {
   if (ctrl && !ctrl.tabs.includes(tab.id)) ctrl.tabs.push(tab.id);
 });
 
-/** Zoekt in welk tabblad/frame het element staat. Geeft { tabId, frameId } terug of null. */
-async function locate(ctrl, selector, { frameHint, timeout, allowHidden = false, wantGone = false, label = '' }) {
+/** Eén keer alle tabbladen/frames afzoeken naar één selector. */
+async function scanOnce(ctrl, selector, { frameHint, frameText, near, allowHidden }) {
+  const isFocus = /^(focus|actief veld|cursor)$/i.test(String(selector).trim());
+  let foundIn = null;
+  let bestFocus = -1;
+  // Nieuwste tabblad (bijv. een net geopend venster) eerst.
+  for (const tabId of [...ctrl.tabs].reverse()) {
+    let frames = [];
+    try {
+      frames = (await chrome.webNavigation.getAllFrames({ tabId })) || [];
+    } catch { /* tab weg */ }
+    const score = (f) => (frameHint && f.url.includes(frameHint) ? 0 : f.frameId === 0 ? 1 : 2);
+    frames.sort((a, b) => score(a) - score(b));
+    for (const f of frames) {
+      const r = await sendToFrame(tabId, f.frameId, { type: 'probe', selector, allowHidden, frameText, near });
+      if (r && r.error) throw new Error(r.error);
+      if (!r || !r.found) continue;
+      // Bij "focus": het frame waar het laatst een veld actief werd wint.
+      if (isFocus) {
+        if ((r.focusAt || 0) > bestFocus) { bestFocus = r.focusAt || 0; foundIn = { tabId, frameId: f.frameId, selector }; }
+        continue;
+      }
+      return { tabId, frameId: f.frameId, selector };
+    }
+  }
+  return foundIn;
+}
+
+/**
+ * Zoekt in welk tabblad/frame het element staat. Geeft { tabId, frameId, selector } terug of null.
+ * Meerdere alternatieven kan met " || ", bijv. "focus || field=Zending" (eerste die gevonden wordt).
+ */
+async function locate(ctrl, selector, { frameHint, frameText = '', near = '', timeout, allowHidden = false, wantGone = false, label = '' }) {
   const started = Date.now();
   const deadline = started + timeout;
+  const alternatives = String(selector).split(/\s+\|\|\s+/).map((x) => x.trim()).filter(Boolean);
   for (;;) {
     let foundIn = null;
-    // Nieuwste tabblad (bijv. een net geopend venster) eerst.
-    for (const tabId of [...ctrl.tabs].reverse()) {
-      let frames = [];
-      try {
-        frames = (await chrome.webNavigation.getAllFrames({ tabId })) || [];
-      } catch { /* tab weg */ }
-      const score = (f) => (frameHint && f.url.includes(frameHint) ? 0 : f.frameId === 0 ? 1 : 2);
-      frames.sort((a, b) => score(a) - score(b));
-      for (const f of frames) {
-        const r = await sendToFrame(tabId, f.frameId, { type: 'probe', selector, allowHidden });
-        if (r && r.error) throw new Error(r.error);
-        if (r && r.found) { foundIn = { tabId, frameId: f.frameId }; break; }
-      }
+    for (const alt of alternatives) {
+      foundIn = await scanOnce(ctrl, alt, { frameHint, frameText, near, allowHidden });
       if (foundIn) break;
     }
     if (!wantGone && foundIn) return foundIn;
@@ -128,6 +149,10 @@ function mainWorldClick(tag) {
     const C = type.startsWith('pointer') && window.PointerEvent ? PointerEvent : MouseEvent;
     el.dispatchEvent(new C(type, opts));
   };
+  fire('pointerover');
+  fire('mouseover');
+  el.dispatchEvent(new MouseEvent('mouseenter', { ...opts, bubbles: false }));
+  fire('mousemove');
   fire('pointerdown');
   fire('mousedown');
   if (typeof el.focus === 'function') el.focus({ preventScroll: true });
@@ -150,6 +175,92 @@ async function clickTagged(tabId, frameId, tag) {
   } catch { /* bijv. geen toegang: val terug op klikken vanuit het content script */ }
   const r = await sendToFrame(tabId, frameId, { type: 'clickTagged', tag });
   if (!r || !r.ok) throw new Error('klikken mislukt');
+}
+
+// ---------------------------------------------------------------- echte toetsaanslagen
+//
+// Via chrome.debugger worden échte (trusted) toetsaanslagen gestuurd, net alsof je zelf typt.
+// Tijdens de handeling toont de browser een balk "… is foutopsporing gestart"; dat is normaal.
+// Lukt dat niet (bijv. geblokkeerd door beleid), dan valt hij terug op nagebootste invoer.
+
+const CDP_KEYS = {
+  Enter: { code: 'Enter', keyCode: 13, text: '\r' },
+  Tab: { code: 'Tab', keyCode: 9 },
+  Escape: { code: 'Escape', keyCode: 27 },
+  Backspace: { code: 'Backspace', keyCode: 8 },
+  Delete: { code: 'Delete', keyCode: 46 },
+  ArrowDown: { code: 'ArrowDown', keyCode: 40 },
+  ArrowUp: { code: 'ArrowUp', keyCode: 38 },
+  ArrowLeft: { code: 'ArrowLeft', keyCode: 37 },
+  ArrowRight: { code: 'ArrowRight', keyCode: 39 },
+  Home: { code: 'Home', keyCode: 36 },
+  End: { code: 'End', keyCode: 35 },
+  F2: { code: 'F2', keyCode: 113 },
+  F3: { code: 'F3', keyCode: 114 },
+  F4: { code: 'F4', keyCode: 115 },
+};
+const KEY_ALIASES = { enter: 'Enter', tab: 'Tab', esc: 'Escape', escape: 'Escape', backspace: 'Backspace', delete: 'Delete', del: 'Delete' };
+
+const attached = new Set(); // tabIds waar wij de debugger aan hebben gekoppeld
+chrome.debugger.onDetach.addListener((src) => attached.delete(src.tabId));
+
+async function cdpAttach(ctrl, tabId) {
+  if (!ctrl.cdp) ctrl.cdp = new Map();
+  if (!ctrl.cdp.has(tabId)) {
+    ctrl.cdp.set(tabId, (async () => {
+      try {
+        if (!attached.has(tabId)) {
+          await chrome.debugger.attach({ tabId }, '1.3');
+          attached.add(tabId);
+        }
+        await chrome.debugger.sendCommand({ tabId }, 'Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
+        return true;
+      } catch (e) {
+        ctrl.cdpError = e.message;
+        return false;
+      }
+    })());
+  }
+  return ctrl.cdp.get(tabId);
+}
+
+async function cdpDetachAll(ctrl) {
+  for (const tabId of ctrl.cdp?.keys() || []) {
+    if (!attached.has(tabId)) continue;
+    await chrome.debugger.detach({ tabId }).catch(() => {});
+    attached.delete(tabId);
+  }
+}
+
+const cdp = (tabId, method, params) => chrome.debugger.sendCommand({ tabId }, method, params);
+
+async function cdpKey(tabId, name) {
+  const key = KEY_ALIASES[String(name).toLowerCase()] || name;
+  const k = CDP_KEYS[key];
+  if (!k && key.length === 1) return cdpText(tabId, key);
+  if (!k) throw new Error(`onbekende toets: ${name}`);
+  await cdp(tabId, 'Input.dispatchKeyEvent', {
+    type: k.text ? 'keyDown' : 'rawKeyDown', key, code: k.code,
+    windowsVirtualKeyCode: k.keyCode, nativeVirtualKeyCode: k.keyCode, text: k.text, unmodifiedText: k.text,
+  });
+  await cdp(tabId, 'Input.dispatchKeyEvent', { type: 'keyUp', key, code: k.code, windowsVirtualKeyCode: k.keyCode, nativeVirtualKeyCode: k.keyCode });
+}
+
+async function cdpText(tabId, text) {
+  for (const ch of text) {
+    const kc = /[a-z0-9]/i.test(ch) ? ch.toUpperCase().charCodeAt(0) : ch === ' ' ? 32 : 0;
+    const code = /[a-z]/i.test(ch) ? 'Key' + ch.toUpperCase() : /\d/.test(ch) ? 'Digit' + ch : ch === ' ' ? 'Space' : '';
+    await cdp(tabId, 'Input.dispatchKeyEvent', { type: 'keyDown', key: ch, code, text: ch, unmodifiedText: ch, windowsVirtualKeyCode: kc, nativeVirtualKeyCode: kc });
+    await cdp(tabId, 'Input.dispatchKeyEvent', { type: 'keyUp', key: ch, code, windowsVirtualKeyCode: kc, nativeVirtualKeyCode: kc });
+  }
+}
+
+/** Voorwaarde "Alleen als": gewone vergelijking, of "bestaat: <selector>" / "!bestaat: <selector>". */
+async function checkWhen(ctrl, when, vars) {
+  const m = String(when).trim().match(/^(!|niet\s+)?bestaat\s*:\s*(.+)$/i);
+  if (!m) return BA.evalCondition(when, vars);
+  const found = await locate(ctrl, BA.fillTemplate(m[2], vars), { timeout: 0 });
+  return m[1] ? !found : !!found;
 }
 
 async function runStep(ctrl, step, vars, settings, label) {
@@ -186,21 +297,57 @@ async function runStep(ctrl, step, vars, settings, label) {
     return;
   }
 
-  const where = await locate(ctrl, selector, { frameHint: step.frame, timeout, allowHidden: step.type === 'read', label });
-  if (!where) throw new Error(`element niet gevonden: ${selector}`);
-  if (step.type === 'waitFor') return;
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const where = await locate(ctrl, selector, {
+      frameHint: step.frame, frameText: fill(step.frameText || ''), near: fill(step.near || ''), timeout: Math.max(0, deadline - Date.now()), allowHidden: step.type === 'read', label,
+    });
+    if (!where) throw new Error(`element niet gevonden: ${selector}`);
+    if (step.type === 'waitFor') return;
 
-  const res = await sendToFrame(where.tabId, where.frameId, {
-    type: 'exec',
-    step: { ...step, selector, value: fill(step.value) },
-  });
-  if (!res) throw new Error('pagina reageerde niet (wordt hij herladen?)');
-  if (!res.ok) throw new Error(res.error || 'onbekende fout');
-  if (res.value && res.value.__clickTag) {
-    await clickTagged(where.tabId, where.frameId, res.value.__clickTag);
+    const value = fill(step.value);
+    const useReal = ctrl.realKeys && (step.type === 'type' || step.type === 'key') && (await cdpAttach(ctrl, where.tabId));
+    const res = await sendToFrame(where.tabId, where.frameId, {
+      type: 'exec',
+      step: { ...step, selector: where.selector, value, realKeys: !!useReal },
+    });
+    if (!res) throw new Error('pagina reageerde niet (wordt hij herladen?)');
+    if (!res.ok) throw new Error(res.error || 'onbekende fout');
+
+    if (res.value && res.value.__clickTag) {
+      await clickTagged(where.tabId, where.frameId, res.value.__clickTag);
+      return;
+    }
+    if (res.value && res.value.__real) {
+      try {
+        if (step.type === 'key') await cdpKey(where.tabId, value || 'Enter');
+        else if (value === '') { if (res.value.hadValue) await cdpKey(where.tabId, 'Backspace'); }
+        else await cdpText(where.tabId, value);
+        return;
+      } catch (e) {
+        // Terugvallen op nagebootste invoer
+        ctrl.realKeys = false;
+        ctrl.cdpError = e.message;
+        const r2 = await sendToFrame(where.tabId, where.frameId, { type: 'exec', step: { ...step, selector: where.selector, value, realKeys: false } });
+        if (!r2 || !r2.ok) throw new Error(r2?.error || 'invoer mislukt');
+        return;
+      }
+    }
+    if (step.type === 'read') {
+      let v = res.value ?? '';
+      if (step.pattern) {
+        let m = null;
+        try { m = String(v).match(new RegExp(step.pattern)); } catch { throw new Error(`ongeldig patroon: ${step.pattern}`); }
+        if (!m) {
+          if (Date.now() < deadline && !ctrl.stopped) { await sleep(400); continue; } // waarde nog niet zoals verwacht: opnieuw proberen
+          throw new Error(`waarde "${String(v).slice(0, 60)}" past niet bij patroon ${step.pattern}`);
+        }
+        v = m[1] ?? m[0];
+      }
+      if (step.variable) vars[step.variable] = v;
+    }
     return;
   }
-  if (step.type === 'read' && step.variable) vars[step.variable] = res.value;
 }
 
 async function runMacro(tabId, macroId, extraVars = {}, source = 'handmatig') {
@@ -211,7 +358,7 @@ async function runMacro(tabId, macroId, extraVars = {}, source = 'handmatig') {
   const macro = macros.find((m) => m.id === macroId);
   if (!macro) throw new Error('Handeling niet gevonden.');
 
-  const ctrl = { macroId, macroName: macro.name, stopped: false, tabs: [tabId], progress: '' };
+  const ctrl = { macroId, macroName: macro.name, stopped: false, tabs: [tabId], progress: '', realKeys: !!macro.realKeys };
   running.set(tabId, ctrl);
   setBadge(tabId, '▶', '#1565c0');
 
@@ -231,7 +378,7 @@ async function runMacro(tabId, macroId, extraVars = {}, source = 'handmatig') {
       stepNr = i + 1;
       if (ctrl.stopped) throw new Error('gestopt door gebruiker');
       if (step.disabled) continue;
-      if (step.when && !BA.evalCondition(step.when, vars)) continue;
+      if (step.when && !(await checkWhen(ctrl, step.when, vars))) continue;
       const typeLabel = BA.STEP_TYPES[step.type]?.label || step.type;
       const label = `▶ ${macro.name} — stap ${stepNr}/${total}: ${typeLabel}`;
       const detail = [BA.fillTemplate(step.selector || '', vars), BA.STEP_TYPES[step.type]?.value ? BA.fillTemplate(step.value ?? '', vars) : '']
@@ -253,6 +400,7 @@ async function runMacro(tabId, macroId, extraVars = {}, source = 'handmatig') {
     showProgress(ctrl, '');
     toastAll(ctrl, `✖ "${macro.name}" mislukt — ${e.message}`, 'error');
   } finally {
+    await cdpDetachAll(ctrl);
     running.delete(tabId);
     setBadge(tabId, '');
     await addLog({
