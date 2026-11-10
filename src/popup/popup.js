@@ -351,6 +351,7 @@ function render() {
     $('lastRun').className = 'msg ' + (last.ok ? 'ok' : 'fail');
     $('lastRun').querySelector('.msg-text').textContent = last.ok ? `✔ "${last.macro}" is uitgevoerd.` : `✖ "${last.macro}" mislukt — ${last.error}`;
   }
+  $('traceBar').hidden = !!running || !recent || last.ok || !(last.trace && last.trace.length);
 
   $('recActive').hidden = !info.recording;
   $('recElsewhere').hidden = !info.recordingElsewhere;
@@ -390,6 +391,20 @@ $('lastRun').querySelector('.msg-close').addEventListener('click', () => {
   dismissedRun = info?.lastRun?.time || null;
   chrome.storage.session.set({ dismissedRun });
   $('lastRun').hidden = true;
+  $('traceBar').hidden = true;
+});
+
+function traceText(e) {
+  const vars = Object.entries(e.vars || {}).map(([k, v]) => `${k}=${v}`).join(', ');
+  return [`Neele-Vat BluJay Assistent ${chrome.runtime.getManifest().version} — "${e.macro}" ${e.ok ? 'gelukt' : 'mislukt'} (${new Date(e.time).toLocaleString('nl-NL')})`,
+    e.error ? `Fout: ${e.error}` : '', `Invoer: ${vars}`, '', ...(e.trace || [])].filter((l, i) => l || i > 2).join('\n');
+}
+
+$('copyTrace').addEventListener('click', async () => {
+  if (!info?.lastRun) return;
+  await navigator.clipboard.writeText(traceText(info.lastRun));
+  $('copied').textContent = '✔ Gekopieerd — plak het in de chat';
+  setTimeout(() => { $('copied').textContent = ''; }, 4000);
 });
 
 const openOptions = () => chrome.runtime.openOptionsPage();

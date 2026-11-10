@@ -264,7 +264,7 @@ async function test(name, fn) {
     await sw.evaluate((presets) => chrome.storage.local.set({ macros: presets, settings: { stepDelay: 30, timeout: 5000 } }), await sw.evaluate(() => PRESETS));
     const id = await sw.evaluate(async (url) => (await chrome.tabs.query({ url }))[0].id, `${base}/uitslag/index.html`);
     const vars = {
-      laaddatum: '2026-09-11', laadtijd_van: '08:00', laadtijd_tot: '', losdatum: '2026-09-14', lostijd_van: '14:00', lostijd_tot: '',
+      laaddatum: '2026-09-11', laadtijd_van: '08:00', laadtijd_tot: '16:00', losdatum: '2026-09-14', lostijd_van: '14:00', lostijd_tot: '',
       opdrachtgever: 'TOPBROUD', referentie: '26SO270-011129', extraref: '', laadadres: 'NEELEMAA3', konditie: 'DDP', plaats: 'Biblis',
       ontvanger: 'ACTIOBIB', losadres: '', losref: '2031479', pallets: '33', palletsoort: 'EP', instructie: 'Laden in de lengte',
     };
@@ -272,11 +272,18 @@ async function test(name, fn) {
     const main = up.frames().find((f) => f.url().endsWith('/uitslagorders.html'));
     const v = main ? await main.evaluate(() => Object.fromEntries([...document.querySelectorAll('input')].map((i) => [i.id, i.value]))) : {};
     const extra = main ? await main.evaluate(() => ({ status: document.getElementById('status').textContent, instr: document.getElementById('instrSaved').textContent })) : {};
+    if (!res.ok) {
+      const log = await sw.evaluate(async () => (await chrome.storage.local.get('log')).log[0]);
+      console.log('       stappenverslag:\n         ' + (log.trace || []).join('\n         '));
+    }
     assert.ok(res.ok, res.error + ' | ' + JSON.stringify(extra));
     assert.deepStrictEqual(
       [v.afh, v.soort, v.opdr, v.ref, v.extra, v.afz, v.laadadres, v.laaddat, v.laadvan, v.laadtot, v.kond, v.kondplaats, v.laadref, v.ontv, v.losadres, v.losdat, v.losvan, v.lostot, v.losref, v.pal, v.palsoort],
-      ['u', 'd', 'TOPBROUD', '26SO270-011129', '', 'TOPBROUD', 'NEELEMAA3', '11-09-26', '08:00', '08:00', 'DDP', 'Biblis', '60123456', 'ACTIOBIB', 'ACTIOBIB', '14-09-26', '14:00', '14:00', '2031479', '33', 'EP']
+      ['u', 'd', 'TOPBROUD', '26SO270-011129', '', 'TOPBROUD', 'NEELEMAA3', '11-09-26', '08:00', '16:00', 'DDP', 'Biblis', '60123456', 'ACTIOBIB', 'ACTIOBIB', '14-09-26', '14:00', '14:00', '2031479', '33', 'EP']
     );
+    // Valkuilen: deze velden mogen niet aangeraakt worden
+    assert.deepStrictEqual([v.verwdat, v.verwtijd, v.vervoerder ?? v.verv], ['10-11-26', '07:59', '']);
+    assert.strictEqual(await main.evaluate(() => document.getElementById('stapel').checked), false, 'Stapelbaar is aangevinkt');
     assert.match(extra.status, /dossier aangemaakt\]\[opgeslagen\]\[pallets opgeslagen/);
     assert.doesNotMatch(extra.status, /zonder tab/, 'Opdrachtgever niet via Tab bereikt');
     assert.strictEqual(await up.textContent('#rolstatus'), '', 'cursor is bij de rol-keuze gekomen');

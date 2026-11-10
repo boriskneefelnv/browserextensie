@@ -289,6 +289,43 @@ async function checkWhen(ctrl, when, vars) {
   return m[1] ? !found : !!found;
 }
 
+/** Komt de waarde in het veld overeen met wat er getypt is? (tolerant voor opmaak zoals 60WH/ of 08:00) */
+function valuesMatch(actual, expected) {
+  const alnum = (v) => String(v ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const a = alnum(actual);
+  const b = alnum(expected);
+  if (!b) return true;
+  if (a === b || a.includes(b)) return true;
+  const date = (v) => {
+    const m = String(v ?? '').trim().match(/^(\d{1,2})-(\d{1,2})-(\d{2}|\d{4})$/);
+    return m ? `${+m[1]}-${+m[2]}-${+m[3] % 100}` : null;
+  };
+  return !!date(actual) && date(actual) === date(expected);
+}
+
+/** Leest het veld terug na het typen; klopt het niet, dan stoppen (anders raken andere velden verkeerd gevuld). */
+async function verifyTyped(ctrl, where, expected) {
+  if (!String(expected ?? '').trim()) return;
+  let last = null;
+  for (let i = 0; i < 5; i++) {
+    const r = await sendToFrame(where.tabId, where.frameId, { type: 'readField', selector: where.selector });
+    if (!r || !r.ok) return; // veld is weg (bijv. ander scherm geopend): niet te controleren
+    if (r.isCheckbox) throw new Error(`het veld is een vinkje (checkbox), geen tekstveld — tekst "${expected}" niet getypt`);
+    if (valuesMatch(r.value, expected)) return;
+    last = r.value;
+    await sleep(150);
+  }
+  const d = await describeFocus(ctrl);
+  throw new Error(`na typen staat er "${last}" in plaats van "${expected}" (cursor bij: ${d})`);
+}
+
+async function describeFocus(ctrl) {
+  const f = await scanOnce(ctrl, 'focus-any', {});
+  if (!f) return '(geen veld)';
+  const d = await sendToFrame(f.tabId, f.frameId, { type: 'describeFocus' });
+  return d?.text || '(onbekend)';
+}
+
 /** Unieke aanduiding van het element met de cursor (om te zien of Tab de cursor verplaatst heeft). */
 async function focusToken(ctrl) {
   const f = await scanOnce(ctrl, 'focus-any', {});
@@ -411,9 +448,13 @@ async function runStep(ctrl, step, vars, settings, label) {
           while (Date.now() < until && (await focusToken(ctrl)) === before) await sleep(40);
         } else if (step.type === 'key') await cdpKey(where.tabId, value || 'Enter');
         else if (value === '') { if (res.value.hadValue) await cdpKey(where.tabId, 'Backspace'); }
-        else await cdpText(where.tabId, value);
+        else {
+          await cdpText(where.tabId, value);
+          await verifyTyped(ctrl, where, value);
+        }
         return;
       } catch (e) {
+        if (/^na typen staat er|^het veld is een vinkje/.test(e.message)) throw e;
         // Terugvallen op nagebootste invoer
         ctrl.realKeys = false;
         ctrl.cdpError = e.message;
@@ -422,6 +463,7 @@ async function runStep(ctrl, step, vars, settings, label) {
         return;
       }
     }
+    if (step.type === 'type') await verifyTyped(ctrl, where, value);
     if (step.type === 'read') {
       let v = res.value ?? '';
       if (step.pattern) {
@@ -447,7 +489,7 @@ async function runMacro(tabId, macroId, extraVars = {}, source = 'handmatig') {
   const macro = macros.find((m) => m.id === macroId);
   if (!macro) throw new Error('Handeling niet gevonden.');
 
-  const ctrl = { macroId, macroName: macro.name, stopped: false, tabs: [tabId], progress: '', realKeys: !!macro.realKeys };
+  const ctrl = { macroId, macroName: macro.name, stopped: false, tabs: [tabId], progress: '', realKeys: !!macro.realKeys, trace: [] };
   running.set(tabId, ctrl);
   setBadge(tabId, '▶', '#1565c0');
 
@@ -473,10 +515,15 @@ async function runMacro(tabId, macroId, extraVars = {}, source = 'handmatig') {
       const detail = [BA.fillTemplate(step.selector || '', vars), BA.STEP_TYPES[step.type]?.value ? BA.fillTemplate(step.value ?? '', vars) : '']
         .filter(Boolean).join(' → ');
       showProgress(ctrl, detail ? `${label} (${detail})` : label);
+      const traceLine = `${stepNr}. ${typeLabel}${detail ? ' ' + detail : ''}`;
       try {
         const r = await runStep(ctrl, step, vars, settings, label);
+        if (['type', 'key', 'tabTo', 'click'].includes(step.type)) ctrl.trace.push(`${traceLine}  → cursor: ${await describeFocus(ctrl)}`);
+        else ctrl.trace.push(traceLine);
+        if (step.type === 'read' && step.variable) ctrl.trace.push(`   ${step.variable} = ${vars[step.variable]}`);
         if (r === 'stop') break;
       } catch (e) {
+        ctrl.trace.push(`${traceLine}  ✖ ${e.message}`);
         if (step.optional) continue;
         throw new Error(`stap ${stepNr} (${typeLabel}): ${e.message}`);
       }
@@ -498,6 +545,7 @@ async function runMacro(tabId, macroId, extraVars = {}, source = 'handmatig') {
       ok: !error,
       error,
       durationMs: Date.now() - started,
+      trace: ctrl.trace,
       vars: Object.fromEntries(Object.entries(vars).filter(([k]) => !(k in BA.builtinVars()))),
     });
   }

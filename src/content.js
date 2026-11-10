@@ -114,7 +114,63 @@
     return anchors;
   }
 
-  /** field=Laaddatum → 1e invulveld na de tekst; field=Laaddatum [2] → het 2e (bijv. begintijd). */
+  /** Rechthoek van de labeltekst zelf (niet van een brede tabelcel eromheen). */
+  function labelRect(a, wantedLower) {
+    if (a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement) return a.getBoundingClientRect();
+    for (const n of a.childNodes) {
+      if (n.nodeType === 3 && norm(n.data).toLowerCase().includes(wantedLower)) {
+        const r = document.createRange();
+        r.selectNodeContents(n);
+        const rr = r.getBoundingClientRect();
+        if (rr.width) return rr;
+      }
+    }
+    return a.getBoundingClientRect();
+  }
+
+  /** Rechthoek van zichtbare tekst in een element (of van een alleen-lezen veld met waarde). */
+  function textRect(el) {
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+      return (el.readOnly || el.disabled) && el.value ? el.getBoundingClientRect() : null;
+    }
+    for (const n of el.childNodes) {
+      if (n.nodeType === 3 && norm(n.data)) {
+        const r = document.createRange();
+        r.selectNodeContents(n);
+        const rr = r.getBoundingClientRect();
+        if (rr.width) return rr;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Invulvelden RECHTS NAAST het label op dezelfde regel (zoals je ze op het scherm ziet),
+   * tot aan de volgende tekst op die regel (bijv. "Laaddatum [datum] [van] [tot] | Losadres").
+   */
+  function fieldsRightOf(a, wantedLower) {
+    const L = labelRect(a, wantedLower);
+    if (!L.height) return [];
+    const cy = L.top + L.height / 2;
+    const sameLine = (r) => r && r.height > 0 && Math.abs(r.top + r.height / 2 - cy) <= Math.max(L.height, r.height) / 2 + 1;
+    let boundary = Infinity;
+    for (const el of document.querySelectorAll('body *')) {
+      if (el === a || el.contains(a) || el.matches('script, style, option, select, textarea, button')) continue;
+      const r = textRect(el);
+      if (sameLine(r) && r.left >= L.right + 1 && r.left < boundary) boundary = r.left;
+    }
+    return [...document.querySelectorAll(EDITABLE)]
+      .filter(isVisible)
+      .map((e) => ({ e, r: e.getBoundingClientRect() }))
+      .filter(({ r }) => sameLine(r) && r.left >= L.right - 2 && r.left < boundary)
+      .sort((x, y) => x.r.left - y.r.left)
+      .map(({ e }) => e);
+  }
+
+  /**
+   * field=Laaddatum → het invulveld rechts naast "Laaddatum"; field=Laaddatum [2] → het 2e (bijv. begintijd).
+   * Staat er niets rechts naast, dan het eerstvolgende veld in de pagina.
+   */
   function findByField(text) {
     let nth = 1;
     const m = text.match(/^(.*?)\s*\[(\d+)\]\s*$/);
@@ -122,10 +178,17 @@
     const out = [];
     // Alleen zichtbare labels; een label dat precies de tekst is gaat voor ("Opdrachtgever" vóór "Master opdrachtgever").
     const wanted = core(text);
+    const wantedLower = norm(text).toLowerCase().replace(/[:*]\s*$/, '');
     const anchors = findTextAnchors(text).filter(isVisible);
     const exact = (a) => core(a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement ? a.value : directText(a)).replace(/^\d+\s+/, '') === wanted;
     anchors.sort((a, b) => exact(b) - exact(a));
     for (const a of anchors) {
+      const right = fieldsRightOf(a, wantedLower);
+      if (right.length >= nth) {
+        if (!out.includes(right[nth - 1])) out.push(right[nth - 1]);
+        continue;
+      }
+      if (right.length) continue; // er staan wel velden naast, maar niet genoeg: niet gokken
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
       walker.currentNode = a;
       let n;
@@ -760,6 +823,15 @@
       case 'progress':
         if (isTop) ui.progress(msg.text);
         return false;
+      case 'readField': {
+        try {
+          const el = find(msg.selector, true);
+          sendResponse({ ok: !!el, value: el ? readValue(el) : null, isCheckbox: el?.type === 'checkbox' });
+        } catch (e) {
+          sendResponse({ ok: false, error: e.message });
+        }
+        return false;
+      }
       case 'focusToken': {
         const a = document.activeElement;
         if (!a) { sendResponse({ token: 'geen' }); return false; }

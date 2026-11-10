@@ -106,3 +106,6 @@ input.missing { border-color: #d9534f; background: #fff3f3; }
 .dot { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: #fff; animation: blink 1s infinite; }
 @keyframes blink { 50% { opacity: .2; } }
 .picked { margin: 6px; padding: 4px 6px; background: #fffbe6; border: 1px solid #e8d48a; font-family: Consolas, monospace; word-break: break-all; }
+.tracebar { display: flex; align-items: center; gap: 8px; margin: 4px 6px 0; }
+.tracebar[hidden] { display: none; }
+#copied { color: #1d5e20; }

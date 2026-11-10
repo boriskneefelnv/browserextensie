@@ -357,7 +357,12 @@ async function renderLog(main) {
           el('span', { class: e.ok ? 'ok' : 'fail' }, e.ok ? '✔ ' : '✖ '),
           el('strong', {}, e.macro), ` — ${e.source}, ${(e.durationMs / 1000).toFixed(1)} s `,
           ...vars.flatMap((v) => [v, ' ']),
-          e.error ? el('div', { class: 'fail' }, e.error) : null
+          e.error ? el('div', { class: 'fail' }, e.error) : null,
+          e.trace && e.trace.length ? el('details', {},
+            el('summary', {}, 'Stappenverslag'),
+            el('pre', { style: 'white-space:pre-wrap;font:10.5px Consolas,monospace;background:#f7f7f7;border:1px solid #ddd;padding:6px;margin:4px 0' }, e.trace.join('\n')),
+            el('button', { onclick: (ev) => { navigator.clipboard.writeText(`"${e.macro}" — ${e.error || 'gelukt'}\n` + e.trace.join('\n')); ev.target.textContent = '✔ Gekopieerd'; } }, '📋 Kopiëren')
+          ) : null
         )
       )
     );

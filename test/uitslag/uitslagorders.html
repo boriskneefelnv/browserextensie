@@ -40,20 +40,57 @@
  <tr><td>Sjabloon</td><td><input id="sjab"></td></tr>
  <tr><td>Mutatie</td><td><input id="mut" class="s"></td></tr>
 </table>
-<table id="dossier" style="display:none">
- <tr><td>Referentie</td><td><input id="ref" disabled></td><td>Extra ref.</td><td><input id="extra" disabled></td></tr>
- <tr><td>Afzender</td><td><input id="afz" disabled></td></tr>
- <tr><td>Laadadres</td><td><input id="laadadres" disabled></td></tr>
- <tr><td>Laaddatum</td><td><input id="laaddat" class="s" disabled><input id="laadvan" class="s" disabled><input id="laadtot" class="s" disabled></td></tr>
- <tr><td>Konditie</td><td><input id="kond" class="s" disabled><input id="kondplaats" disabled></td></tr>
- <tr><td>Vervoerder</td><td><input id="verv" disabled></td></tr>
- <tr><td>Laadref</td><td><input id="laadref" disabled></td></tr>
- <tr><td>Ontvanger</td><td><input id="ontv" disabled></td></tr>
- <tr><td>Losadres</td><td><input id="losadres" disabled></td></tr>
- <tr><td>Losdatum</td><td><input id="losdat" class="s" disabled><input id="losvan" class="s" disabled><input id="lostot" class="s" disabled></td></tr>
- <tr><td>Losref</td><td><input id="losref" disabled></td></tr>
- <tr><td>Aantal Pallets</td><td><input id="pal" class="s" disabled><input id="palsoort" class="s" disabled></td></tr>
-</table>
+<!-- Dossierscherm zoals in BluJay: 3 kolommen, absoluut gepositioneerd. De volgorde in de HTML is
+     bewust NIET de zichtbare volgorde; de Tab-volgorde komt uit tabindex (zoals beschreven door de gebruiker). -->
+<div id="dossier" style="display:none;position:relative;height:330px;width:980px"></div>
+<script>
+(function () {
+  // [label, x, y, velden: [id, breedte, tabindex, standaardwaarde, type]]
+  const L = [
+    ['Opdrachtgever', 10, 10, [['opdrtoon', 70, -1, 'TOPBROUD', 'ro']]],
+    ['Afzender', 10, 30, [['afz', 130, 3]]],
+    ['Laadadres', 10, 50, [['laadadres', 130, 4]]],
+    ['Laaddatum', 10, 70, [['laaddat', 60, 5, '10-11-26'], ['laadvan', 40, 6, '07:59'], ['laadtot', 40, 7, '16:01']]],
+    ['Konditie', 10, 90, [['kond', 36, 8], ['kondplaats', 90, 9]]],
+    ['Vervoerder', 10, 110, [['verv', 130, 10]]],
+    ['Laadref', 10, 200, [['laadref', 180, 11]]],
+    ['Referentie', 300, 10, [['ref', 180, 1]]],
+    ['Extra ref.', 300, 30, [['extra', 180, 2]]],
+    ['Ontvanger', 300, 50, [['ontv', 120, 12, 'TOPBROUD']]],
+    ['Losadres', 300, 70, [['losadres', 120, 13, 'TOPBROUD']]],
+    ['Losdatum', 300, 90, [['losdat', 60, 14, '10-11-26'], ['losvan', 40, 15], ['lostot', 40, 16]]],
+    ['Losref', 300, 200, [['losref', 180, 17]]],
+    ['Aangemaakt', 560, 10, [['aangemaakt', 170, -1, 'Boris Kneefel', 'ro']]],
+    ['Aantal Pallets', 560, 120, [['pal', 50, 20, '0'], ['palsoort', 50, 21]]],
+    ['Stapelbaar', 560, 140, [['stapel', 14, 40, '', 'checkbox']]],
+    ['Verwachte datum', 10, 290, [['verwdat', 60, 30, '10-11-26'], ['verwtijd', 40, 31, '07:59']]],
+  ];
+  const box = document.getElementById('dossier');
+  const labels = [], inputs = [];
+  for (const [text, x, y, fields] of L) {
+    const lab = document.createElement('span');
+    lab.textContent = text;
+    lab.style.cssText = `position:absolute;left:${x}px;top:${y + 2}px`;
+    labels.push(lab);
+    let fx = x + 90;
+    for (const [id, w, tab, val, type] of fields) {
+      const i = document.createElement('input');
+      i.id = id;
+      if (type === 'checkbox') i.type = 'checkbox';
+      if (type === 'ro') i.readOnly = true;
+      i.value = val || '';
+      i.tabIndex = tab;
+      i.disabled = true;
+      i.style.cssText = `position:absolute;left:${fx}px;top:${y}px;width:${w}px`;
+      fx += w + 6;
+      inputs.push(i);
+    }
+  }
+  // HTML-volgorde door elkaar: eerst alle velden achterstevoren, daarna alle labels.
+  inputs.reverse().forEach((i) => box.append(i));
+  labels.forEach((l) => box.append(l));
+})();
+</script>
 <p id="status"></p>
 <div style="margin-top:300px"><a>Menu</a> (ander menu, ver weg)</div>
 <script>
@@ -88,6 +125,7 @@ $('sjab').addEventListener('keydown', (e) => {
       $('dossier').style.display = '';
       document.querySelectorAll('#dossier input').forEach((i) => (i.disabled = false));
       $('afz').value = $('opdr').value;
+      $('stapel').checked = false;
       $('tabkop').textContent = 'Dossiernummer 60123456';
       $('bar').style.display = '';
       $('ref').focus();
