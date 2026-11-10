@@ -407,6 +407,16 @@ $('copyTrace').addEventListener('click', async () => {
   setTimeout(() => { $('copied').textContent = ''; }, 4000);
 });
 
+$('dumpScreen').addEventListener('click', async () => {
+  const r = await send({ type: 'dumpScreen', tabId });
+  if (!r?.text) return showError('Kon de schermopbouw niet lezen (ververs BluJay en probeer opnieuw).');
+  await navigator.clipboard.writeText(r.text);
+  showError('');
+  $('lastRun').className = 'msg ok';
+  $('lastRun').querySelector('.msg-text').textContent = '✔ Schermopbouw gekopieerd — plak het in de chat.';
+  $('lastRun').hidden = false;
+});
+
 const openOptions = () => chrome.runtime.openOptionsPage();
 $('openOptions').addEventListener('click', openOptions);
 $('openOptions2').addEventListener('click', openOptions);

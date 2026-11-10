@@ -133,6 +133,12 @@ $('sjab').addEventListener('keydown', (e) => {
     }, 600);
   }
 });
+// Valkuil (alleen met #valkuil): Tab na de begintijd springt naar het keuzevak bovenin (zoals "Neele-Vat Warehouse").
+if (parent.location.hash === '#valkuil') {
+  $('laadvan').addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') { e.preventDefault(); parent.document.getElementById('rol').focus(); }
+  });
+}
 $('losref').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.isTrusted) log('opgeslagen'); });
 $('palsoort').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.isTrusted) log('pallets opgeslagen'); });
 $('menuBtn').addEventListener('click', () => { $('menu').style.display = 'block'; });

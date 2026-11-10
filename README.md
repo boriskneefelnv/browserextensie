@@ -105,8 +105,13 @@ De ingebouwde handeling *Dossiermutaties draaien* wordt dan automatisch bijgewer
 - BluJay traag? Verhoog bij ⚙ → *Instellingen* de wachttijd en time-out, of de *Wacht*-stap na *Menu* (nu 1,5 s).
 - Neemt BluJay een ingevulde waarde niet over? Zet bij die stap (⋯) **Letter voor letter typen** aan.
 
-Tussen de velden gaat hij altijd met **Tab** (zoals jij), tot de cursor in het juiste veld staat. Hij springt niet
-naar andere velden; staat de cursor ooit buiten het formulier (bijv. bij de rol-keuze), dan klikt hij het veld weer aan.
+In het dossier gebruikt hij **alleen Tab en typen**, in de vaste volgorde van BluJay (Opdrachtgever → Referentie →
+Extra ref. → Afzender → Laadadres → Laaddatum/van/tot → Konditie(/plaats) → Vervoerder → Laadref → Ontvanger → Losadres
+→ Losdatum/van/tot → Losref → Enter). Springt de cursor uit het dossierscherm, dan stopt hij zonder te typen.
+Na elk veld controleert hij of de waarde er goed in staat.
+
+**Hulp nodig?** Na een mislukte actie: *📋 Details kopiëren* in het paneel. Voor de opbouw van een scherm:
+*Extra → Schermopbouw kopiëren*. Plak het resultaat in de chat met de ontwikkelaar.
 
 ## Ontwikkelen / testen
 

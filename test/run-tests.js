@@ -291,6 +291,29 @@ async function test(name, fn) {
     await up.close();
   });
 
+  await test('Uitslagdossier — cursor springt uit het scherm: stoppen zonder te typen', async () => {
+    const up = await context.newPage();
+    await up.goto(`${base}/uitslag/index.html#valkuil`);
+    await up.frameLocator('#side').locator('text=Inslag').waitFor();
+    await up.waitForTimeout(400);
+    const id = await sw.evaluate(async (url) => (await chrome.tabs.query({})).find((t) => t.url === url).id, `${base}/uitslag/index.html#valkuil`);
+    const vars = {
+      laaddatum: '10-11-2026', laadtijd_van: '10:00', laadtijd_tot: '16:00', losdatum: '10-11-2026', lostijd_van: '08:00', lostijd_tot: '',
+      opdrachtgever: 'TOPBROUD', referentie: '26SO270-011129', extraref: '', laadadres: 'NEELEMAA3', konditie: 'DDP', plaats: 'Biblis',
+      ontvanger: 'ACTIOBIB', losadres: '', losref: '2031479', pallets: '33', palletsoort: 'EP', instructie: 'Laden in de lengte',
+    };
+    const res = await sw.evaluate(({ id, vars }) => runMacro(id, 'uitslagdossier', vars, 'test'), { id, vars });
+    assert.strictEqual(res.ok, false);
+    assert.match(res.error, /uit het dossierscherm gesprongen/);
+    const main = up.frames().find((f) => f.url().endsWith('/uitslagorders.html'));
+    const v = await main.evaluate(() => Object.fromEntries([...document.querySelectorAll('input')].map((i) => [i.id, i.value])));
+    assert.strictEqual(v.laadvan, '10:00');
+    assert.deepStrictEqual([v.verwdat, v.verwtijd, v.laadtot], ['10-11-26', '07:59', '16:01'], 'er is toch iets getypt');
+    const log = await sw.evaluate(async () => (await chrome.storage.local.get('log')).log[0]);
+    assert.ok(log.trace.some((l) => /cursor:/.test(l)), 'stappenverslag ontbreekt');
+    await up.close();
+  });
+
   await context.close();
   server.close();
   console.log(failures ? `\n${failures} test(s) mislukt` : '\nAlle tests geslaagd');

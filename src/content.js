@@ -832,6 +832,27 @@
         }
         return false;
       }
+      case 'dumpScreen': {
+        // Opbouw van het zichtbare scherm (teksten en velden met positie), om bij problemen mee te sturen.
+        const items = [];
+        for (const el of document.querySelectorAll('body *')) {
+          if (el.closest('[data-blujay-assistent]') || !isVisible(el)) continue;
+          const r = el.getBoundingClientRect();
+          if (el.matches('input, select, textarea, button, [contenteditable=true]')) {
+            const v = el instanceof HTMLSelectElement ? el.options[el.selectedIndex]?.text : el.value;
+            items.push({ y: r.top, x: r.left, s: `${el === document.activeElement ? '► ' : ''}[${el.tagName.toLowerCase()}${el.type ? ' ' + el.type : ''}] name=${el.name || '-'} id=${el.id || '-'} tab=${el.tabIndex}${el.readOnly ? ' alleen-lezen' : ''}${el.disabled ? ' uit' : ''} ${Math.round(r.width)}x${Math.round(r.height)} waarde="${String(v ?? '').slice(0, 40)}"` });
+          } else {
+            const t = directText(el);
+            if (t) items.push({ y: r.top, x: r.left, s: `"${t.slice(0, 50)}" <${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}>` });
+          }
+        }
+        if (!items.length) { sendResponse({ text: '' }); return false; }
+        items.sort((a, b) => Math.round(a.y / 5) - Math.round(b.y / 5) || a.x - b.x);
+        const a = document.activeElement;
+        const head = `actief element: ${a ? a.tagName.toLowerCase() + (a.name ? ' name=' + a.name : '') + (a.id ? ' id=' + a.id : '') : '-'}`;
+        sendResponse({ hasFocus: document.hasFocus(), text: head + '\n' + items.slice(0, 600).map((i) => `${Math.round(i.y)},${Math.round(i.x)}  ${i.s}`).join('\n') });
+        return false;
+      }
       case 'focusToken': {
         const a = document.activeElement;
         if (!a) { sendResponse({ token: 'geen' }); return false; }

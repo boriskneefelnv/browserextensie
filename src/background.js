@@ -413,6 +413,11 @@ async function runStep(ctrl, step, vars, settings, label) {
     const where = await locate(ctrl, selector, {
       frameHint: step.frame, frameText: fill(step.frameText || ''), near: fill(step.near || ''), pattern: step.type === 'read' ? step.pattern || '' : '', timeout: Math.max(0, deadline - Date.now()), allowHidden: step.type === 'read', label,
     });
+    if (where && step.stayInFrame && ctrl.lastWhere && (where.tabId !== ctrl.lastWhere.tabId || where.frameId !== ctrl.lastWhere.frameId)) {
+      // Cursor is uit het scherm gesprongen (bijv. naar het vak "Neele-Vat Warehouse"): niets typen, direct stoppen.
+      throw new Error(`de cursor is uit het dossierscherm gesprongen (staat nu bij: ${await describeFocus(ctrl)}) — gestopt zonder te typen`);
+    }
+    if (where) ctrl.lastWhere = { tabId: where.tabId, frameId: where.frameId };
     if (!where) {
       if (step.type === 'read' && step.pattern) {
         throw new Error(step.variable === 'dossiernr'
@@ -701,6 +706,20 @@ async function handleMessage(msg, sender) {
       await chrome.storage.session.set({ lastPicked: picked });
       toast(senderTab, `Element gekozen (gekopieerd): ${msg.selector}`, 'info');
       return { ok: true };
+    }
+
+    case 'dumpScreen': {
+      let frames = [];
+      try { frames = (await chrome.webNavigation.getAllFrames({ tabId: msg.tabId })) || []; } catch { /* tab weg */ }
+      const parts = [`Neele-Vat BluJay Assistent ${chrome.runtime.getManifest().version} — schermopbouw ${new Date().toLocaleString('nl-NL')}`];
+      for (const f of frames) {
+        const r = await sendToFrame(msg.tabId, f.frameId, { type: 'dumpScreen' });
+        if (!r || !r.text) continue;
+        let path = f.url;
+        try { const u = new URL(f.url); path = u.pathname; } catch { /* negeer */ }
+        parts.push(`\n=== frame ${f.frameId} (ouder ${f.parentFrameId}) ${path}${r.hasFocus ? '  [heeft focus]' : ''}\n${r.text}`);
+      }
+      return { text: parts.join('\n') };
     }
 
     case 'pickerCancel': {
