@@ -17,6 +17,7 @@
   //   label=Ordernummer                -> invoerveld dat bij dit label hoort
   //   field=van_periode                -> eerste invulbare veld ná de tekst "van_periode"
   //                                       (ook als die tekst in een alleen-lezen veld staat)
+  //   contains=Akkoord                 -> element waarvan de tekst "Akkoord" bevat
   //   xpath=//div[@id="x"]             -> XPath
   //   ...>>2                           -> het 3e gevonden element (0-geteld)
 
@@ -87,7 +88,8 @@
     return norm(t);
   }
 
-  function findByField(text) {
+  /** Elementen waarvan de eigen tekst (of de waarde van een alleen-lezen veld) de tekst bevat. */
+  function findTextAnchors(text) {
     const wanted = norm(text).toLowerCase().replace(/[:*]\s*$/, '');
     const anchors = [];
     for (const el of document.querySelectorAll('body *')) {
@@ -102,8 +104,12 @@
       }
       if (t && norm(t).toLowerCase().includes(wanted)) anchors.push(el);
     }
+    return anchors;
+  }
+
+  function findByField(text) {
     const out = [];
-    for (const a of anchors) {
+    for (const a of findTextAnchors(text)) {
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
       walker.currentNode = a;
       let n;
@@ -133,6 +139,7 @@
     if (sel.startsWith('text=')) list = findByText(sel.slice(5));
     else if (sel.startsWith('label=')) list = findByLabel(sel.slice(6));
     else if (sel.startsWith('field=')) list = findByField(sel.slice(6));
+    else if (sel.startsWith('contains=')) list = findTextAnchors(sel.slice(9));
     else if (sel.startsWith('xpath=')) list = findByXPath(sel.slice(6));
     else list = [...document.querySelectorAll(sel)];
     return { list, index };

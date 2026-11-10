@@ -168,7 +168,7 @@ async function test(name, fn) {
   };
   const dossierValues = async () => {
     const f = dossierPage.frames().find((fr) => fr.url().endsWith('/cq0579.html'));
-    return f.evaluate(() => [...document.querySelectorAll('input.v')].map((i) => i.value));
+    return f.evaluate(() => [...document.querySelectorAll('input.v')].map((i) => i.value).concat(document.getElementById('status').textContent));
   };
   const runDossier = async (vars) => {
     await sw.evaluate((presets) => chrome.storage.local.set({ macros: presets, settings: { stepDelay: 30, timeout: 5000 } }), await sw.evaluate(() => PRESETS));
@@ -177,19 +177,19 @@ async function test(name, fn) {
   };
 
   await test('Dossiermutaties draaien — zonder klantcode (exact zoals screenshot)', async () => {
-    const installed = await sw.evaluate(async () => (await chrome.storage.local.get('presetsInstalled')).presetsInstalled);
-    assert.deepStrictEqual(installed, ['dossiermutaties'], 'preset niet geïnstalleerd bij installatie');
+    const installed = await sw.evaluate(async () => (await chrome.storage.local.get('presetVersions')).presetVersions);
+    assert.ok(installed && installed.dossiermutaties >= 1, 'preset niet geïnstalleerd bij installatie');
     await openDossier();
     const res = await runDossier({ van: '2026-01', tot: '2026-12', klant: '' });
     assert.ok(res.ok, res.error);
-    assert.deepStrictEqual(await dossierValues(), ['1', '99999', '1', '99', '60WH', '60WH', '26/01', '26/12', '', 'ZZZ', '1', '999999999999999', 'J']);
+    assert.deepStrictEqual(await dossierValues(), ['1', '99999', '1', '99', '60WH', '60WH', '26/01', '26/12', '', 'ZZZ', '1', '999999999999999', 'J', 'Klaar']);
   });
 
   await test('Dossiermutaties draaien — met klantcode en andere periode', async () => {
     await openDossier();
     const res = await runDossier({ van: '2025-03', tot: '2026-02', klant: 'hen01' });
     assert.ok(res.ok, res.error);
-    assert.deepStrictEqual(await dossierValues(), ['1', '99999', '1', '99', '60WH', '60WH', '25/03', '26/02', 'HEN01', 'HEN01', '1', '999999999999999', 'J']);
+    assert.deepStrictEqual(await dossierValues(), ['1', '99999', '1', '99', '60WH', '60WH', '25/03', '26/02', 'HEN01', 'HEN01', '1', '999999999999999', 'J', 'Klaar']);
   });
 
   await context.close();

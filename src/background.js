@@ -355,20 +355,27 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
-// Vaste handelingen (presets) toevoegen bij installatie/update, maar alleen één keer per preset.
+// Vaste handelingen (presets) toevoegen bij installatie/update.
+// Een verwijderde preset komt niet terug; een nieuwere versie vervangt de oude.
 chrome.runtime.onInstalled.addListener(async () => {
-  const { presetsInstalled = [] } = await chrome.storage.local.get('presetsInstalled');
+  let { presetVersions, presetsInstalled } = await chrome.storage.local.get(['presetVersions', 'presetsInstalled']);
+  presetVersions = presetVersions || Object.fromEntries((presetsInstalled || []).map((id) => [id, 1]));
   const { macros } = await BA.loadConfig();
   let changed = false;
   for (const p of PRESETS) {
-    if (presetsInstalled.includes(p.id)) continue;
-    if (!macros.some((m) => m.id === p.id)) macros.push(BA.normalizeMacro(structuredClone(p)));
-    presetsInstalled.push(p.id);
+    const version = p.version || 1;
+    const installed = presetVersions[p.id];
+    if (installed && installed >= version) continue;
+    const idx = macros.findIndex((m) => m.id === p.id);
+    const fresh = BA.normalizeMacro(structuredClone(p));
+    if (idx >= 0) macros[idx] = fresh;
+    else if (!installed) macros.push(fresh); // nieuw: toevoegen; eerder verwijderd: niet terugzetten
+    presetVersions[p.id] = version;
     changed = true;
   }
   if (changed) {
     await BA.saveMacros(macros);
-    await chrome.storage.local.set({ presetsInstalled });
+    await chrome.storage.local.set({ presetVersions });
   }
 });
 

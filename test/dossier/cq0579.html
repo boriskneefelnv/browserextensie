@@ -18,4 +18,14 @@
 <div class="r"><input class="l" readonly tabindex="-1" value="12  t/m_dossiernr :"> <input class="v" data-nr="12" value="5"></div>
 <div class="gap"></div>
 <div class="r"><input class="l" readonly tabindex="-1" value="13  excel :"> <input class="v" data-nr="13" value="N"></div>
-<p id="status"></p><script>document.addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("status").textContent="Bevestigd";});</script></body></html>
+<p id="status"></p>
+<div id="prompt" style="display:none;margin-top:20px">Uw keuze &nbsp;: <input id="ok" size="4"><br>( 99/ok = Akkoord, 00 = Afbreken )</div>
+<script>
+document.querySelector('input.v[data-nr="13"]').addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  setTimeout(() => { document.getElementById("prompt").style.display = "block"; const ok = document.getElementById("ok"); ok.value = "99"; ok.focus(); ok.select(); }, 500);
+});
+document.getElementById("ok").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("status").textContent = e.target.value === "99" ? "Klaar" : "Afgebroken";
+});
+</script></body></html>

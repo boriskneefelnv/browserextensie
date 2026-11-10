@@ -6,6 +6,7 @@
 const PRESETS = [
   {
     id: 'dossiermutaties',
+    version: 2,
     name: 'Dossiermutaties draaien',
     description: 'Menu → keuze cq0579 → selectie invullen. Klantcode leeg = alle klanten.',
     urlPattern: '',
@@ -57,8 +58,11 @@ const PRESETS = [
       { type: 'key', selector: 'field=t/m_dossiernr', value: 'Tab' },
       { type: 'type', selector: 'field=excel', value: 'J' },
 
-      // 4. Bevestigen — staat uit tot bekend is welke toets BluJay hier verwacht.
-      { type: 'key', selector: 'field=excel', value: 'Enter', disabled: true },
+      // 4. Bevestigen: Enter → onderin verschijnt "Uw keuze : 99 (99/ok = Akkoord, 00 = Afbreken)" → Enter.
+      { type: 'key', selector: 'field=excel', value: 'Enter' },
+      { type: 'waitFor', selector: 'contains=99/ok = Akkoord', timeout: 20000 },
+      { type: 'type', selector: 'field=Uw keuze', value: '99' },
+      { type: 'key', selector: 'field=Uw keuze', value: 'Enter' },
     ],
   },
 ];

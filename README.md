@@ -36,8 +36,13 @@ De extensie doet dan:
 | 12 | t/m_dossiernr | 999999999999999 |
 | 13 | excel | J |
 
-De laatste stap (**Enter** om te bevestigen) staat nog **uit**. Zet hem aan via ⚙ → *Dossiermutaties draaien*
-→ stap *Toets Enter* → ⋯ → vinkje *Uitgeschakeld* weghalen (of vervang Enter door de toets die BluJay verwacht).
+Daarna bevestigt hij:
+
+| Stap | Wat |
+|---|---|
+| 4 | Drukt **Enter** in het veld *excel* |
+| 5 | Wacht tot onderin *Uw keuze : 99 — ( 99/ok = Akkoord, 00 = Afbreken )* verschijnt |
+| 6 | Zet daar `99` en drukt nog eens **Enter** — klaar |
 
 ## Installeren (eenmalig)
 
@@ -49,6 +54,8 @@ De laatste stap (**Enter** om te bevestigen) staat nog **uit**. Zet hem aan via 
 6. **Herlaad het BluJay-tabblad** (F5), anders kent die pagina de extensie nog niet.
 
 Na een update van de bestanden: klik op ↻ bij de extensie in `chrome://extensions` en herlaad BluJay.
+De ingebouwde handeling *Dossiermutaties draaien* wordt dan automatisch bijgewerkt naar de nieuwste versie
+(eigen aanpassingen daaraan worden dan overschreven).
 
 ## Zelf handelingen maken
 
@@ -58,7 +65,7 @@ Na een update van de bestanden: klik op ↻ bij de extensie in `chrome://extensi
   Opmaak: `{{van|JJ/MM}}` → `26/01`, `{{klant|hoofdletters}}`.
 - **Voorwaarden:** *Alleen als* bij een stap, bijv. `{{klant}} == ` (klant is leeg) of `{{status}} != Geleverd`.
 - **Automatisch starten:** laat een handeling vanzelf starten als een veld in BluJay een bepaalde waarde krijgt.
-- **Elementen aanwijzen:** `text=Menu`, `field=van_periode` (eerste invulveld ná die tekst), `label=…`, CSS (`#id`) of `xpath=…`.
+- **Elementen aanwijzen:** `text=Menu`, `field=van_periode` (eerste invulveld ná die tekst), `contains=…` (element waarvan de tekst dit bevat), `label=…`, CSS (`#id`) of `xpath=…`.
   Met *🎯 Element kiezen* in de popup klik je een element aan en wordt de selector gekopieerd.
 - **Delen:** via *Exporteren* / *Importeren* (JSON) kun je handelingen met collega's delen.
 

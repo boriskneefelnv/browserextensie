@@ -2,6 +2,7 @@
   "macros": [
     {
       "id": "dossiermutaties",
+      "version": 2,
       "name": "Dossiermutaties draaien",
       "description": "Menu → keuze cq0579 → selectie invullen. Klantcode leeg = alle klanten.",
       "urlPattern": "",
@@ -196,8 +197,22 @@
         {
           "type": "key",
           "selector": "field=excel",
-          "value": "Enter",
-          "disabled": true
+          "value": "Enter"
+        },
+        {
+          "type": "waitFor",
+          "selector": "contains=99/ok = Akkoord",
+          "timeout": 20000
+        },
+        {
+          "type": "type",
+          "selector": "field=Uw keuze",
+          "value": "99"
+        },
+        {
+          "type": "key",
+          "selector": "field=Uw keuze",
+          "value": "Enter"
         }
       ]
     }
