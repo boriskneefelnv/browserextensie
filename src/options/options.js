@@ -98,7 +98,7 @@ function renderNav() {
       el('button', {
         class: state.view === 'macro' && m.id === state.selectedId ? 'active' : '',
         onclick: () => show('macro', m.id),
-      }, m.name || '(naamloos)', el('span', { class: 'count' }, `${m.steps.length}`))
+      }, m.name || '(naamloos)', m.module ? el('span', { class: 'count' }, 'klant-module') : m.router ? el('span', { class: 'count' }, 'start') : el('span', { class: 'count' }, `${m.steps.length}`))
     );
   }
 }

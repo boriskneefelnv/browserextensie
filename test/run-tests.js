@@ -221,10 +221,17 @@ async function test(name, fn) {
     const extId = new URL(sw.url()).host;
     const panel = await context.newPage();
     await panel.goto(`chrome-extension://${extId}/src/popup/popup.html`);
+    // Overzicht: de klant-modules staan er niet los in, alleen het startpunt
+    const items = await panel.locator('#macroList .item').allTextContents();
+    assert.ok(items.some((t) => t.includes('Uitslagdossier aanmaken')));
+    assert.ok(!items.some((t) => /Uitslag – (Top Brands|Maxell)/.test(t)), 'klant-modules horen niet los in het overzicht');
     await panel.locator('#macroList .item', { hasText: 'Uitslagdossier aanmaken' }).click();
     const card = panel.locator('#detail');
+    assert.strictEqual(await card.locator('input[data-name]').count(), 0, 'vóór het inlezen van de pakbon horen er geen velden te zijn');
     await card.locator('input[type=file]').setInputFiles(path.join(__dirname, 'fixtures/paklijst-topbrands-test.pdf'));
     await card.locator('.pdfstatus.ok').waitFor({ timeout: 15000 });
+    assert.match(await card.locator('.modkop').textContent(), /Klant-module: Top Brands/);
+    assert.strictEqual(await card.locator('input[data-name^="adres_"]').count(), 0, 'Top Brands hoort geen adresvelden te tonen');
     const val = (n) => card.locator(`input[data-name="${n}"]`).inputValue();
     assert.match(await card.locator('.pdfstatus').textContent(), /Top Brands → Voorbeeld Retail GmbH \(DE\), Teststadt/);
     assert.strictEqual(await val('opdrachtgever'), 'TOPBROUD');
@@ -252,7 +259,7 @@ async function test(name, fn) {
     await card.locator('.actions button', { hasText: 'Uitvoeren' }).click();
     await panel.waitForTimeout(500);
     const codes = await sw.evaluate(async () => (await chrome.storage.local.get('ontvangerCodes')).ontvangerCodes);
-    assert.deepStrictEqual(codes, { K9999999: 'TESTONTV' });
+    assert.deepStrictEqual(codes, { 'topbrands:K9999999': 'TESTONTV' });
     await sw.evaluate(() => { for (const c of running.values()) c.stopped = true; });
     await panel.waitForTimeout(500);
     // Tweede keer: code wordt automatisch ingevuld
@@ -262,6 +269,11 @@ async function test(name, fn) {
     await card2.locator('input[type=file]').setInputFiles(path.join(__dirname, 'fixtures/paklijst-topbrands-test.pdf'));
     await card2.locator('.pdfstatus.ok').waitFor({ timeout: 15000 });
     assert.strictEqual(await card2.locator('input[data-name="ontvanger"]').inputValue(), 'TESTONTV');
+    // Daarna een Maxell-pakbon in hetzelfde scherm: de Top Brands-velden verdwijnen, de Maxell-module verschijnt
+    await card2.locator('input[type=file]').setInputFiles(path.join(__dirname, 'fixtures/Test_Picking_List_MEL-PL009999_Delivery_18.11.26.pdf'));
+    await card2.locator('.modkop', { hasText: 'Maxell' }).waitFor({ timeout: 15000 });
+    assert.ok(await card2.locator('input[data-name="adres_naam1"]').count() === 1, 'Maxell hoort het adresblok te tonen');
+    assert.strictEqual(await card2.locator('input[data-name="ontvanger"]').inputValue(), '', 'Top Brands-code mag niet bij Maxell terechtkomen');
     await panel.close();
   });
 
@@ -279,7 +291,7 @@ async function test(name, fn) {
     const id = await sw.evaluate(async (url) => (await chrome.tabs.query({})).find((t) => t.url === url).id, `${base}/blujay/index.html${hash}`);
     await sw.evaluate((id) => chrome.tabs.setZoom(id, 0.9), id); // zoals bij de gebruiker: niet op 100%
     await up.waitForTimeout(300);
-    const res = await sw.evaluate(({ id, vars }) => runMacro(id, 'uitslagdossier', vars, 'test'), { id, vars: uitslagVars });
+    const res = await sw.evaluate(({ id, vars }) => runMacro(id, 'uitslag_topbrands', vars, 'test'), { id, vars: uitslagVars });
     const model = await up.evaluate(() => ({ ...window.model }));
     const logText = await up.textContent('#log');
     const instr = await up.textContent('#instrSaved');
@@ -325,6 +337,7 @@ async function test(name, fn) {
     await card.locator('.pdfstatus.ok').waitFor({ timeout: 15000 });
     const val = (n) => card.locator(`input[data-name="${n}"]`).inputValue();
     assert.match(await card.locator('.pdfstatus').textContent(), /Maxell → TESTWINKEL Supers B\.V, PROEFSTAD/);
+    assert.match(await card.locator('.modkop').textContent(), /Klant-module: Maxell/);
     assert.deepStrictEqual(
       await Promise.all(['opdrachtgever', 'referentie', 'konditie', 'plaats', 'losdatum', 'ontvanger', 'adres_naam1', 'adres_naam2', 'adres_straat', 'adres_postcode', 'adres_land', 'adres_plaats', 'adres_contact', 'adres_telefoon', 'adres_email'].map(val)),
       ['VAT-MAAS', 'MEL-PL009999', 'DDP', 'PROEFSTAD', '18-11-2026', '', 'TESTWINKEL Supers B.V', 'Goederenontvangst', 'Proefstraat 7', '1234AB', 'NL', 'PROEFSTAD', 'verkoop@example.com', '+00 44 1000 200300', 'verkoop@example.com']
@@ -340,10 +353,10 @@ async function test(name, fn) {
     const id = await sw.evaluate(async (url) => (await chrome.tabs.query({})).find((t) => t.url === url).id, `${base}/blujay/index.html`);
     const vars = {
       ...uitslagVars, opdrachtgever: 'VAT-MAAS', referentie: 'MEL-PL009999', ontvanger: '', losadres: '', losref: '', pallets: '', plaats: 'PROEFSTAD',
-      klantnummer: 'TESTWINKEL Supers B.V|1234AB', adres_naam1: 'TESTWINKEL Supers B.V', adres_naam2: 'Goederenontvangst', adres_straat: 'Proefstraat 7',
+      klantnummer: 'maxell:TESTWINKEL Supers B.V|1234AB', adres_naam1: 'TESTWINKEL Supers B.V', adres_naam2: 'Goederenontvangst', adres_straat: 'Proefstraat 7',
       adres_postcode: '1234AB', adres_land: 'NL', adres_plaats: 'PROEFSTAD', adres_contact: 'verkoop@example.com', adres_telefoon: '+00 44 1000 200300', adres_email: 'verkoop@example.com',
     };
-    const res = await sw.evaluate(({ id, vars }) => runMacro(id, 'uitslagdossier', vars, 'test'), { id, vars });
+    const res = await sw.evaluate(({ id, vars }) => runMacro(id, 'uitslag_maxell', vars, 'test'), { id, vars });
     const m = await up.evaluate(() => ({ ...window.model }));
     const logText = await up.textContent('#log');
     if (!res.ok) {
@@ -359,7 +372,7 @@ async function test(name, fn) {
     assert.match(logText, /dossier aangemaakt\]\[adres bewaard\]\[opgeslagen\]/);
     assert.doesNotMatch(logText, /GEANNULEERD|WAREHOUSE|ZOEKSCHERM/);
     const codes = await sw.evaluate(async () => (await chrome.storage.local.get('ontvangerCodes')).ontvangerCodes);
-    assert.deepStrictEqual(codes, { 'TESTWINKEL Supers B.V|1234AB': 'TESTZON00' }, 'nieuwe code niet onthouden');
+    assert.deepStrictEqual(codes, { 'maxell:TESTWINKEL Supers B.V|1234AB': 'TESTZON00' }, 'nieuwe code niet onthouden');
     await up.close();
   });
 

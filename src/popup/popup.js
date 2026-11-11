@@ -187,8 +187,20 @@ async function readPdf(file, box, m, status) {
       status.textContent = `✖ Klant niet herkend in "${file.name}". Deze klant is nog niet ingesteld.`;
       return;
     }
-    // Velden uit de paklijst (opnieuw) vullen; datums/tijden die je al had ingevuld blijven staan.
-    for (const inp of m.inputs) {
+    // Startpunt: de klant-module van deze klant activeren (alleen díe velden tonen)
+    let target = m;
+    if (m.router) {
+      target = info.macros.find((x) => x.id === klant.module);
+      if (!target) {
+        status.className = 'pdfstatus fail';
+        status.textContent = `✖ Klant ${klant.naam} herkend, maar de module "${klant.module}" ontbreekt (zie Beheer).`;
+        return;
+      }
+      box.dataset.module = target.id;
+      box._toonModule(target, klant);
+    }
+    // Velden uit de paklijst vullen; datums/tijden die je al had ingevuld blijven staan.
+    for (const inp of target.inputs) {
       const input = box.querySelector(`input[data-name="${inp.name}"]`);
       if (!input) continue;
       if (Object.prototype.hasOwnProperty.call(waarden, inp.name)) {
@@ -198,8 +210,8 @@ async function readPdf(file, box, m, status) {
       else if (!['date', 'time'].includes(inp.type)) input.value = BA.fillTemplate(inp.default || '', BA.builtinVars());
       input.classList.toggle('missing', !!inp.required && !input.value);
     }
-    box.dataset.klantnummer = waarden.klantnummer || '';
-    const ontbreekt = m.inputs.filter((i) => i.required && !['date', 'time'].includes(i.type) && !waarden[i.name]).map((i) => i.label);
+    box.dataset.klantnummer = waarden.klantsleutel || waarden.klantnummer || '';
+    const ontbreekt = target.inputs.filter((i) => i.required && !['date', 'time'].includes(i.type) && !waarden[i.name]).map((i) => i.label);
     status.className = 'pdfstatus ok';
     status.textContent = `✔ ${klant.naam}${waarden.afnemer ? ' → ' + waarden.afnemer : ''}\n${file.name}` +
       (ontbreekt.length ? `\n⚠ Niet gevonden, vul zelf in: ${ontbreekt.join(', ')}` : '');
@@ -244,7 +256,9 @@ function renderDetail(m) {
       el('div', { class: 'toolbar' }, backBtn, runTop),
       m.description ? el('p', { class: 'desc' }, m.description) : null,
       m.pdf ? makePdfZone(m, () => box) : null,
-      renderFields(m),
+      m.router
+        ? el('div', { class: 'module-area' }, el('p', { class: 'hint' }, 'Na het inlezen van de pakbon verschijnen hier de velden van de herkende klant.'))
+        : renderFields(m),
       showSummary ? summary : null,
       el('div', { class: 'actions' }, runBtn)
     )
@@ -272,7 +286,9 @@ function renderDetail(m) {
       ontvangerCodes[box.dataset.klantnummer] = vars.ontvanger.toUpperCase();
       await chrome.storage.local.set({ ontvangerCodes });
     }
-    const res = await send({ type: 'runMacro', tabId, macroId: m.id, vars });
+    const macroId = m.router ? box.dataset.module : m.id;
+    if (!macroId) return showError('Sleep eerst de pakbon (PDF) in het vak, zodat de klant herkend wordt.');
+    const res = await send({ type: 'runMacro', tabId, macroId, vars });
     if (!res?.ok) return showError(res?.error || 'Starten mislukt');
     startedAt = Date.now();
     setTimeout(refresh, 300);
@@ -281,11 +297,18 @@ function renderDetail(m) {
   backBtn.addEventListener('click', () => { view = null; showError(''); render(); });
   runTop.addEventListener('click', run);
   runBtn.addEventListener('click', run);
-  box.querySelectorAll('input[data-name]').forEach((i) => {
+  const koppel = (root) => root.querySelectorAll('input[data-name]').forEach((i) => {
     i.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
     i.addEventListener('input', () => { updateSummary(); i.classList.remove('missing'); });
     i.addEventListener('keydown', (e) => { if (e.key === 'Enter') normalizeInput(i); }, true);
   });
+  koppel(box);
+  // Startpunt: velden van de herkende klant-module tonen (vervangt die van een eventuele vorige klant)
+  box._toonModule = (mod, klant) => {
+    const area = box.querySelector('.module-area');
+    area.replaceChildren(el('div', { class: 'modkop' }, `Klant-module: ${klant.naam}`), ...renderFields(mod));
+    koppel(area);
+  };
   updateSummary();
   return { box, runBtns: [runTop, runBtn] };
 }
@@ -337,8 +360,9 @@ function render() {
     if ($('detail').firstChild !== box) $('detail').replaceChildren(box);
   } else {
     const list = $('macroList');
-    const matching = info.macros.filter((m) => info.matching.includes(m.id));
-    const others = info.macros.filter((m) => !info.matching.includes(m.id));
+    const zichtbaar = info.macros.filter((m) => !m.module); // klant-modules alleen via het startpunt
+    const matching = zichtbaar.filter((m) => info.matching.includes(m.id));
+    const others = zichtbaar.filter((m) => !info.matching.includes(m.id));
     const items = matching.map((m) => overviewItem(m, false));
     if ($('showAll').checked) items.push(...others.map((m) => overviewItem(m, true)));
     if (!items.length) {

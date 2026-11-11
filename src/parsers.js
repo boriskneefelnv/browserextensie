@@ -13,10 +13,6 @@ var BAParsers = (() => {
   };
   const cols = (line) => line.split(/\s{3,}/).map((s) => s.trim()).filter(Boolean);
 
-  /** Ontvanger-codes in BluJay per klantnummer van de afnemer (aanvulbaar vanuit het paneel). */
-  const ONTVANGERS = {
-    K1300650: 'ACTIOBIB', // Action Service & Distribution B.V. (DE), Biblis
-  };
 
   /** Landnaam → landcode (voor Bestemmingscode/Land in BluJay). */
   const LANDEN = {
@@ -65,6 +61,11 @@ var BAParsers = (() => {
     {
       id: 'topbrands',
       naam: 'Top Brands',
+      module: 'uitslag_topbrands', // eigen klant-module (velden + stappen)
+      // Ontvanger-codes in BluJay per klantnummer van de afnemer (aanvulbaar vanuit het paneel)
+      ontvangers: {
+        K1300650: 'ACTIOBIB', // Action Service & Distribution B.V. (DE), Biblis
+      },
       herken: (t) => /top\s?brands/i.test(t),
       lees(text, lines) {
         const klantnummer = first(text, /Customer number:?\s+([A-Z]?\d{4,})/i);
@@ -80,21 +81,14 @@ var BAParsers = (() => {
           palletsoort: 'EP',
           klantnummer,
           afnemer: [adres.naam, adres.plaats].filter(Boolean).join(', '),
-          adres_naam1: adres.naam || '',
-          adres_naam2: '',
-          adres_straat: adres.straat || '',
-          adres_postcode: String(adres.postcode || '').replace(/\s+/g, ''),
-          adres_land: landcode(adres.land) || '',
-          adres_plaats: adres.plaats || '',
-          adres_contact: '',
-          adres_telefoon: '',
-          adres_email: '',
         };
       },
     },
     {
       id: 'maxell',
       naam: 'Maxell',
+      module: 'uitslag_maxell', // eigen klant-module (velden + stappen, incl. nieuw adres)
+      ontvangers: {},
       herken: (t) => /maxell europe/i.test(t) && /picking list/i.test(t),
       lees(text, lines, bestandsnaam = '') {
         // Afleveradres: linkerkolom onder "Customer" tot "Item number"; rechterkolom-labels overslaan.
@@ -143,19 +137,26 @@ var BAParsers = (() => {
     },
   ];
 
-  /** Herkent de klant en leest de waarden. Geeft { klant, waarden } of { klant: null }. */
+  /**
+   * Herkent de klant en leest de waarden met de module van die klant.
+   * Geeft { klant: { id, naam, module }, waarden } of { klant: null }.
+   * Onthouden ontvanger-codes zijn per klant-module ("topbrands:K1300650"), zodat klanten elkaar nooit beïnvloeden.
+   */
   function parse(text, lines, geleerdeOntvangers = {}, bestandsnaam = '') {
     const klant = KLANTEN.find((k) => k.herken(text));
     if (!klant) return { klant: null, waarden: {} };
     const waarden = klant.lees(text, lines || text.split('\n'), bestandsnaam);
-    const codes = { ...ONTVANGERS, ...geleerdeOntvangers };
-    if (waarden.klantnummer && codes[waarden.klantnummer]) {
-      waarden.ontvanger = codes[waarden.klantnummer];
-      waarden.losadres = codes[waarden.klantnummer];
+    if (waarden.klantnummer) {
+      waarden.klantsleutel = `${klant.id}:${waarden.klantnummer}`;
+      const code = geleerdeOntvangers[waarden.klantsleutel] || (klant.ontvangers || {})[waarden.klantnummer];
+      if (code) {
+        waarden.ontvanger = code;
+        waarden.losadres = code;
+      }
     }
-    return { klant: { id: klant.id, naam: klant.naam }, waarden };
+    return { klant: { id: klant.id, naam: klant.naam, module: klant.module }, waarden };
   }
 
-  return { parse, KLANTEN, ONTVANGERS };
+  return { parse, KLANTEN };
 })();
 if (typeof module !== 'undefined') module.exports = BAParsers;

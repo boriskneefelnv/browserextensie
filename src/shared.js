@@ -166,6 +166,8 @@ var BA = (() => {
       stepDelay: m.stepDelay ?? null,
       realKeys: !!m.realKeys,
       pdf: !!m.pdf,
+      router: !!m.router, // startpunt dat na herkenning van de klant de juiste klant-module activeert
+      module: !!m.module, // klant-module: niet los in het overzicht, wordt via het startpunt gebruikt
       inputs: Array.isArray(m.inputs) ? m.inputs : [],
       triggers: Array.isArray(m.triggers) ? m.triggers : [],
       steps: Array.isArray(m.steps) ? m.steps : [],

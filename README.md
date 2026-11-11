@@ -66,10 +66,15 @@ Daarna bevestigt hij:
 | klantnummer afnemer (bijv. K1300650) | Ontvanger/Losadres (bijv. ACTIOBIB) |
 | vast voor Top Brands | Laadadres NEELEMAA3, Konditie DDP |
 
-**Klanten:** Top Brands (opdrachtgever TOPBROUD) en Maxell (opdrachtgever voorlopig VAT-MAAS; leverdatum uit de
+**Klant-modules:** *Uitslagdossier aanmaken* toont eerst alleen het vak voor de pakbon. Na het inlezen herkent hij de
+klant en activeert hij **de module van die klant**: alleen díe velden en stappen. Elke klant is een losse module
+(in Beheer: *Uitslag – Top Brands*, *Uitslag – Maxell*) met eigen onthouden ontvanger-codes; klanten beïnvloeden
+elkaar niet. Een nieuwe klant = een nieuwe module + herkenning in `src/parsers.js`.
+
+**Klanten:** Top Brands (opdrachtgever TOPBROUD, ontvangers staan al in BluJay, geen adresblok) en Maxell (opdrachtgever voorlopig VAT-MAAS; leverdatum uit de
 bestandsnaam, bijv. `..._Delivery_18.11.26.pdf`).
 
-**Onbekende ontvanger → nieuw adres:** is er voor de afnemer nog geen ontvanger-code bekend, dan blijft *Ontvanger*
+**Onbekende ontvanger → nieuw adres (alleen Maxell-module):** is er voor de afnemer nog geen ontvanger-code bekend, dan blijft *Ontvanger*
 leeg en vult hij het blok *Nieuw adres* uit de pakbon. Bij uitvoeren maakt hij het adres in BluJay aan: in Ontvanger
 **Ctrl+K** → Naam regel 1/2, Adres regel 1, Postcode, Bestemmingscode (BluJay zet zelf "ZONE NL" in Plaats regel 1),
 Plaats regel 2 = plaats, Land, Naam (contactpersoon), Telefoon, E-mail → Enter → meldingen **OK → Bevestigen → OK** →

@@ -109,3 +109,5 @@ input.missing { border-color: #d9534f; background: #fff3f3; }
 .tracebar { display: flex; align-items: center; gap: 8px; margin: 4px 6px 0; }
 .tracebar[hidden] { display: none; }
 #copied { color: #1d5e20; }
+.modkop { margin: 6px 6px 0; padding: 4px 8px; background: #e8f0f8; border: 1px solid var(--bj-line); color: var(--bj-blue-dark); font-weight: bold; }
+.module-area .hint { margin: 8px; }
