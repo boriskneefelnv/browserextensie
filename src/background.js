@@ -286,6 +286,14 @@ async function cdpDetachAll(ctrl) {
 const cdp = (tabId, method, params) => chrome.debugger.sendCommand({ tabId }, method, params);
 
 const MOD_BITS = { alt: 1, ctrl: 2, control: 2, meta: 4, cmd: 4, shift: 8 };
+const MOD_KEYS = {
+  alt: { bit: 1, key: 'Alt', code: 'AltLeft', vk: 18 },
+  ctrl: { bit: 2, key: 'Control', code: 'ControlLeft', vk: 17 },
+  control: { bit: 2, key: 'Control', code: 'ControlLeft', vk: 17 },
+  meta: { bit: 4, key: 'Meta', code: 'MetaLeft', vk: 91 },
+  cmd: { bit: 4, key: 'Meta', code: 'MetaLeft', vk: 91 },
+  shift: { bit: 8, key: 'Shift', code: 'ShiftLeft', vk: 16 },
+};
 
 async function cdpKey(tabId, name) {
   // Toetscombinatie, bijv. "Ctrl+K"
@@ -297,8 +305,23 @@ async function cdpKey(tabId, name) {
     const key = known ? (KEY_ALIASES[last.toLowerCase()] || last) : last.length === 1 ? last.toLowerCase() : last;
     const code = known ? known.code : /^[a-z]$/i.test(last) ? 'Key' + last.toUpperCase() : /^\d$/.test(last) ? 'Digit' + last : last;
     const vk = known ? known.keyCode : last.length === 1 ? last.toUpperCase().charCodeAt(0) : 0;
+    // Zoals een mens: eerst de modifier-toets(en) omlaag (bijv. Ctrl), dan de toets, dan alles weer omhoog.
+    // BluJay houdt zelf bij of Ctrl is ingedrukt (via de Ctrl-toets zelf); zonder die stap herkent het Ctrl+K niet.
+    const mods = delen.slice(0, -1).map((m) => MOD_KEYS[m.toLowerCase()]);
+    let actief = 0;
+    for (const mk of mods) {
+      actief |= mk.bit;
+      await cdp(tabId, 'Input.dispatchKeyEvent', { type: 'rawKeyDown', key: mk.key, code: mk.code, modifiers: actief, windowsVirtualKeyCode: mk.vk, nativeVirtualKeyCode: mk.vk });
+      await sleep(30);
+    }
     await cdp(tabId, 'Input.dispatchKeyEvent', { type: 'rawKeyDown', key, code, modifiers, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
+    await sleep(30);
     await cdp(tabId, 'Input.dispatchKeyEvent', { type: 'keyUp', key, code, modifiers, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
+    for (const mk of mods.reverse()) {
+      actief &= ~mk.bit;
+      await sleep(20);
+      await cdp(tabId, 'Input.dispatchKeyEvent', { type: 'keyUp', key: mk.key, code: mk.code, modifiers: actief, windowsVirtualKeyCode: mk.vk, nativeVirtualKeyCode: mk.vk });
+    }
     return;
   }
   const key = KEY_ALIASES[String(name).toLowerCase()] || name;

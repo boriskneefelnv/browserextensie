@@ -222,6 +222,7 @@ async function test(name, fn) {
     const panel = await context.newPage();
     await panel.goto(`chrome-extension://${extId}/src/popup/popup.html`);
     // Overzicht: de klant-modules staan er niet los in, alleen het startpunt
+    await panel.locator('#macroList .item', { hasText: 'Uitslagdossier aanmaken' }).waitFor(); // eerst wachten tot de lijst er staat
     const items = await panel.locator('#macroList .item').allTextContents();
     assert.ok(items.some((t) => t.includes('Uitslagdossier aanmaken')));
     assert.ok(!items.some((t) => /Uitslag – (Top Brands|Maxell)/.test(t)), 'klant-modules horen niet los in het overzicht');
@@ -371,7 +372,7 @@ async function test(name, fn) {
     // plaats achter Konditie kan maar 15 tekens bevatten (zoals in BluJay)
     assert.deepStrictEqual([m.opdr, m.ref, m.ontv, m.losadres, m.kond, m.kondplaats], ['VAT-MAAS', 'MEL-PL009999', 'TESTZON00', 'TESTZON00', 'DDP', 'ALPHEN AAN DEN ']);
     assert.match(logText, /dossier aangemaakt\]\[adres bewaard\]\[opgeslagen\]/);
-    assert.doesNotMatch(logText, /GEANNULEERD|WAREHOUSE|ZOEKSCHERM|CTRL-K MET WAARDE/);
+    assert.doesNotMatch(logText, /GEANNULEERD|WAREHOUSE|ZOEKSCHERM|CTRL-K MET WAARDE|CTRL-K ZONDER CTRL-TOETS/);
     const codes = await sw.evaluate(async () => (await chrome.storage.local.get('ontvangerCodes')).ontvangerCodes);
     assert.deepStrictEqual(codes, { 'maxell:TESTWINKEL Supers B.V|1234AB': 'TESTZON00' }, 'nieuwe code niet onthouden');
     await up.close();

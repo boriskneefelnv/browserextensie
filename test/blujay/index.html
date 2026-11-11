@@ -25,6 +25,7 @@
   #oudTab .lab { z-index: 0; }
   #dekking { position: absolute; left: 190px; top: 90px; width: 1000px; height: 560px; background: #fff; z-index: 1; }
   .lab, .box, #ed, #velden input { z-index: 2; }
+  #ctrlkMenu { z-index: 3; }
   #bar, .menu, #popup, #zoek, #melding, #bevestig, #dlgSoort { z-index: 3; }
   .lab { position: absolute; }
   .box { position: absolute; height: 13px; border: 1px solid #889; background: #fff; overflow: hidden; white-space: nowrap; cursor: text; }
@@ -70,6 +71,9 @@
   <div>Instructies overig</div><div id="instrItem">Instructies uitslag</div><div>Opmerkingen</div>
 </div>
 <div id="popup"><b>Instructies uitslag</b><br><input id="instr" style="width:300px"><div id="instrSaved"></div></div>
+<div class="menu" id="ctrlkMenu" style="left:290px;top:88px">
+  <div>Raadpleeg</div><div id="ckNieuw">Nieuw</div><div>Kopieeren</div>
+</div>
 <div id="melding" style="position:absolute;left:220px;top:200px;width:400px;border:2px solid #1f5c97;background:#fff;padding:8px;display:none">
   <div class="tekst"></div><br><input type="button" id="mOk" value="OK"> <input type="button" id="mAnnuleren" value="Annuleren">
 </div>
@@ -123,6 +127,7 @@ const SCHERMEN = {
   dossier: {
     kop: 'Dossiernummer 60123456',
     velden: [
+      ['status', 'Status', 840, 99, 50, 'Nieuw', { ro: true }],
       ['d_opdr', 'Opdrachtgever', 316, 134, 71, 'TOPBROUD'],
       ['afz', 'Afzender', 316, 151, 138, 'TOPBROUD'],
       ['laadadres', 'Laadadres', 316, 168, 138, 'TOPBROUD'],
@@ -245,10 +250,20 @@ function volgende(id) {
   activeer(vg[i]);
 }
 
+// Zoals BluJay: houdt zelf bij of de Ctrl-toets is ingedrukt (via de Ctrl-toets zelf)
+let ctrlIngedrukt = false;
+document.addEventListener('keydown', (e) => { if (e.key === 'Control') ctrlIngedrukt = true; }, true);
+document.addEventListener('keyup', (e) => { if (e.key === 'Control') ctrlIngedrukt = false; }, true);
+
 function toets(e) {
-  // Ctrl+K in Ontvanger: nieuw adres aanmaken
+  // Ctrl+K in Ontvanger: nieuw adres aanmaken (alleen als de Ctrl-toets echt is ingedrukt)
   if (e.ctrlKey && e.key.toLowerCase() === 'k' && actief === 'ontv') {
     e.preventDefault();
+    if (!ctrlIngedrukt) { log('CTRL-K ZONDER CTRL-TOETS'); sluitEditor(); $('tv').focus(); return; }
+    sluitEditor();
+    $('ctrlkMenu').style.display = 'block';
+    $('tv').focus();
+    return;
     if (ed.value) { // gevuld veld: ander menu (zoals in BluJay)
       log('CTRL-K MET WAARDE');
       sluitEditor();
@@ -322,6 +337,12 @@ function opslaan() {
   $('tv').focus();
   log('opgeslagen');
 }
+
+$('ckNieuw').addEventListener('click', () => {
+  $('ctrlkMenu').style.display = 'none';
+  $('tv').focus();
+  setTimeout(() => { render('adres'); activeer('a_n1'); }, 300);
+});
 
 // ---------------------------------------------------------------- meldingen bij nieuw adres
 function toonMelding(tekst, ok) {
