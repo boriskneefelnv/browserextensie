@@ -559,7 +559,9 @@
     };
     window.addEventListener('mousedown', onDown, true);
     setTimeout(() => { window.removeEventListener('mousedown', onDown, true); clickHits.delete(tag); }, 5000);
-    return { __clickTag: tag, x, y, coordsOk: coordsOk && visibleAtPoint };
+    const d = describeEl(el);
+    const desc = `${d.tag}${d.id ? '#' + d.id : ''} "${d.text || d.label || ''}" @${d.pos}${visibleAtPoint ? '' : ' (bedekt door ' + (top ? top.tagName.toLowerCase() + (top.id ? '#' + top.id : '') : '?') + ')'}`;
+    return { __clickTag: tag, x, y, coordsOk: coordsOk && visibleAtPoint, desc };
   }
   const clickHits = new Map();
 

@@ -201,6 +201,7 @@ async function waitForNavigations(ctrl, since, timeout = 20000) {
 async function performClick(ctrl, where, v, step) {
   const t = Date.now();
   let done = false;
+  ctrl.trace.push(`   klik op ${v.desc || '?'} (${step.clickMode === 'dom' || !ctrl.realKeys ? 'in de pagina' : 'echte muisklik'})`);
   if (ctrl.realKeys && step.clickMode !== 'dom' && v.coordsOk && (await cdpAttach(ctrl, where.tabId))) {
     // Muis-coördinaten zijn CSS-pixels van het tabblad (zoom wordt door de browser zelf verrekend).
     await cdpClick(where.tabId, v.x, v.y);

@@ -6,7 +6,7 @@
 const PRESETS = [
   {
     id: 'dossiermutaties',
-    version: 6,
+    version: 7,
     realKeys: true,
     stepDelay: 30,
     name: 'Dossiermutaties draaien',
@@ -25,7 +25,7 @@ const PRESETS = [
       { type: 'setVar', variable: 'klant_tot', value: 'ZZZ', when: '{{klant}} == ' },
 
       // 1. Menu in de zijbalk
-      { type: 'click', selector: 'text=Menu', clickMode: 'dom' },
+      { type: 'click', selector: 'text=Menu', clickMode: 'dom', expect: 'contains=Uw keuze', expectTimeout: 5000 },
       { type: 'wait', value: '300' },
 
       // 2. "Uw keuze": ts4117 vervangen door cq0579 en Tab

@@ -307,6 +307,20 @@ async function test(name, fn) {
     await up.close();
   });
 
+  await test('Dossiermutaties — klik op Menu zonder effect geeft een duidelijke melding', async () => {
+    const pg = await context.newPage();
+    await pg.goto(`${base}/blujay/index.html`); // hier opent "Menu" niets
+    await pg.waitForTimeout(400);
+    await sw.evaluate((presets) => chrome.storage.local.set({ macros: presets, settings: { stepDelay: 30, timeout: 3000 } }), await sw.evaluate(() => PRESETS));
+    const id = await sw.evaluate(async (url) => (await chrome.tabs.query({})).find((t) => t.url === url).id, `${base}/blujay/index.html`);
+    const res = await sw.evaluate((id) => runMacro(id, 'dossiermutaties', { van: '2026-01', tot: '2026-12', klant: '' }, 'test'), id);
+    assert.strictEqual(res.ok, false);
+    assert.match(res.error, /klik op "text=Menu" had geen effect/);
+    const log = await sw.evaluate(async () => (await chrome.storage.local.get('log')).log[0]);
+    assert.ok(log.trace.some((l) => /klik op span "Menu"/.test(l)), 'verslag noemt het geklikte element niet:\n' + log.trace.join('\n'));
+    await pg.close();
+  });
+
   await test('Nauwkeurige opname: elke toets, klik, cursor en "bleef staan" in het rapport', async () => {
     const up = await context.newPage();
     await up.goto(`${base}/uitslag/index.html`);
