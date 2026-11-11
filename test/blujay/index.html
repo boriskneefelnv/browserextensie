@@ -327,9 +327,10 @@ function toets(e) {
 let adresBewaard = false;
 function opslaan() {
   if (scherm === SCHERMEN.adres) {
+    // 1e Enter: veld afsluiten (cursor naar tussenvakje). De 2e Enter (in het tussenvakje) slaat op.
     sluitEditor();
     $('tv').focus();
-    setTimeout(() => toonMelding('Geen valide resultaten gevonden voor ontvanger, aanmaken?', () => { $('bevestig').style.display = 'block'; }), 300);
+    log('adresveld afgesloten');
     return;
   }
   if (scherm !== SCHERMEN.dossier) return;
@@ -342,6 +343,13 @@ $('ckNieuw').addEventListener('click', () => {
   $('ctrlkMenu').style.display = 'none';
   $('tv').focus();
   setTimeout(() => { render('adres'); activeer('a_n1'); }, 300);
+});
+
+let adresMelding = false;
+$('tv').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || scherm !== SCHERMEN.adres || adresMelding) return;
+  adresMelding = true;
+  setTimeout(() => toonMelding('Geen valide resultaten gevonden voor ontvanger, aanmaken?', () => { $('bevestig').style.display = 'block'; }), 300);
 });
 
 // ---------------------------------------------------------------- meldingen bij nieuw adres

@@ -190,7 +190,7 @@ const PRESETS = [
   {
     id: 'uitslag_maxell',
     module: true,
-    version: 3,
+    version: 4,
     stepDelay: 60,
     name: 'Uitslag – Maxell',
     description: 'Klant-module Maxell (opdrachtgever VAT-MAAS). Maakt een nieuw adres aan als de ontvanger nog onbekend is.',
@@ -305,7 +305,10 @@ const PRESETS = [
       { type: 'tabTo', selector: 'focus:E-mail adres', value: '4', when: '{{nieuw}} == ja && {{adres_email}} != ' },
       { type: 'type', selector: 'focus', value: '{{adres_email}}', when: '{{nieuw}} == ja && {{adres_email}} != ' },
       { type: 'tabTo', selector: 'focus:Internetadres', value: '6', when: '{{nieuw}} == ja' },
+      // 1e Enter sluit het veld af; de 2e Enter slaat het adres op (zoals in de opname)
       { type: 'key', selector: 'focus', value: 'Enter', when: '{{nieuw}} == ja' },
+      { type: 'wait', value: '1500', when: '{{nieuw}} == ja' },
+      { type: 'key', selector: 'body', value: 'Enter', when: '{{nieuw}} == ja && !bestaat: text=OK' },
       // Meldingen: "Geen valide resultaten…" → OK, dan Bevestigen, dan "Bewaar ontvanger als herbruikbaar" → OK
       { type: 'click', selector: 'text=OK', timeout: 15000, when: '{{nieuw}} == ja' },
       { type: 'click', selector: 'text=Bevestigen', timeout: 15000, when: '{{nieuw}} == ja' },
