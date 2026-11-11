@@ -179,7 +179,7 @@
     // Alleen zichtbare labels; een label dat precies de tekst is gaat voor ("Opdrachtgever" vóór "Master opdrachtgever").
     const wanted = core(text);
     const wantedLower = norm(text).toLowerCase().replace(/[:*]\s*$/, '');
-    const anchors = findTextAnchors(text).filter(isVisible);
+    const anchors = findTextAnchors(text).filter(isVisible).filter((a) => isOnTop(a, labelRect(a, norm(text).toLowerCase().replace(/[:*]\s*$/, ''))));
     const exact = (a) => core(a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement ? a.value : directText(a)).replace(/^\d+\s+/, '') === wanted;
     anchors.sort((a, b) => exact(b) - exact(a));
     for (const a of anchors) {
@@ -254,7 +254,7 @@
     const wantedLower = norm(text).toLowerCase().replace(/[:*]\s*$/, '');
     // Alleen een label dat PRECIES de tekst is (dus niet "Levellen van zendingen" bij "Zending").
     const exact = (a) => core(a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement ? a.value : directText(a)) === wanted;
-    const anchors = findTextAnchors(text).filter(isVisible).filter(exact);
+    const anchors = findTextAnchors(text).filter(isVisible).filter(exact).filter((a) => isOnTop(a, labelRect(a, wantedLower)));
     for (const a of anchors) {
       const L = labelRect(a, wantedLower);
       if (!L.height) continue;
@@ -736,6 +736,20 @@
   let diagBuf = [];
   let diagTimer = null;
 
+  /**
+   * Ligt dit element (op het punt van zijn tekst) echt bovenop? BluJay laat schermen van andere
+   * tabbladen onzichtbaar ónder het actieve scherm liggen; die labels tellen niet mee.
+   */
+  function isOnTop(el, rect) {
+    const r = rect || el.getBoundingClientRect();
+    const x = r.left + r.width / 2;
+    const y = r.top + r.height / 2;
+    if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) return true; // buiten beeld: niet te controleren
+    const top = document.elementFromPoint(x, y);
+    if (!top) return true;
+    return top === el || el.contains(top) || top.contains(el);
+  }
+
   /** Tekst die links op dezelfde regel staat (het label), anders de laatste tekst ervoor. */
   function labelFor(el) {
     const r = el.getBoundingClientRect();
@@ -747,7 +761,7 @@
       const tr = textRect(t);
       if (!tr || Math.abs(tr.top + tr.height / 2 - cy) > Math.max(tr.height, r.height) / 2 + 1) continue;
       const dx = r.left - tr.right;
-      if (dx >= -2 && dx < bestDx) { bestDx = dx; best = t; }
+      if (dx >= -2 && dx < bestDx && isOnTop(t, tr)) { bestDx = dx; best = t; }
     }
     if (best) {
       const v = best instanceof HTMLInputElement || best instanceof HTMLTextAreaElement ? best.value : directText(best);
@@ -1141,6 +1155,20 @@
         const a = document.activeElement;
         if (!a || a === document.body) { sendResponse({ text: '(niets)' }); return false; }
         if (isTiny(a)) { sendResponse({ text: '(tussenvakje)' }); return false; }
+        const isButton = a.matches('button, input[type=button], input[type=submit], [role=button]');
+        if (isButton) {
+          // Tekst van de melding: de tekst die erboven/ervoor staat
+          let tekst = '';
+          const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          let n;
+          while ((n = walker.nextNode())) {
+            if (a.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING) break;
+            const p = n.parentElement;
+            if (norm(n.data) && p && isVisible(p) && isOnTop(p)) tekst = norm(n.data);
+          }
+          sendResponse({ text: `knop "${a.value || norm(a.textContent)}"`, isButton: true, melding: tekst.slice(0, 120) });
+          return false;
+        }
         const v = 'value' in a && a.value ? ` (waarde "${String(a.value).slice(0, 20)}")` : '';
         sendResponse({ text: `veld "${labelFor(a)}"${v}` });
         return false;

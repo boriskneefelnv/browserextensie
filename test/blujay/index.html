@@ -21,6 +21,11 @@
   #kop { position: absolute; left: 207px; top: 41px; background: #1f5c97; color: #fff; padding: 3px 30px; }
   #bar { position: absolute; left: 330px; top: 66px; display: none; }
   #bar td { padding: 2px 8px; cursor: pointer; }
+  #oudTab { position: absolute; left: 190px; top: 90px; width: 1000px; height: 560px; z-index: 0; }
+  #oudTab .lab { z-index: 0; }
+  #dekking { position: absolute; left: 190px; top: 90px; width: 1000px; height: 560px; background: #fff; z-index: 1; }
+  .lab, .box, #ed, #velden input { z-index: 2; }
+  #bar, .menu, #popup, #zoek, #melding, #bevestig, #dlgSoort { z-index: 3; }
   .lab { position: absolute; }
   .box { position: absolute; height: 13px; border: 1px solid #889; background: #fff; overflow: hidden; white-space: nowrap; cursor: text; }
   .ro { background: #e8e8e8; }
@@ -47,7 +52,17 @@
 </div>
 <div id="kop">Home</div>
 <table id="bar"><tr><td>Wijzig</td><td>Cancel</td><td id="menuBtn">Menu</td><td>Artikelregels</td><td>Goederenregels</td><td>Dossiermutaties</td></tr></table>
+<!-- Een ander (ouder) tabblad: ligt onzichtbaar ónder het actieve scherm, zoals in BluJay -->
+<div id="oudTab">
+  <div class="lab" style="left:95px;top:61px">Opdrachtgever</div>
+  <div class="lab" style="left:95px;top:78px">Afzender</div>
+  <div class="lab" style="left:95px;top:113px">Laaddatum</div>
+</div>
+<div id="dekking"></div>
 <div id="velden"></div>
+<div id="dlgSoort" style="position:absolute;left:600px;top:190px;width:460px;border:2px solid #1f5c97;background:#fff;padding:8px;display:none">
+  Dossiersoort is onbekend voor dit dossier !!<br><br><input type="button" id="dlgSoortOk" value="OK">
+</div>
 <div class="menu" id="menu" style="left:400px;top:85px">
   <div>Artikelregels</div><div id="omschr">Omschrijvingen</div><div>Documenten</div>
 </div>
@@ -263,6 +278,13 @@ function toets(e) {
       sluitEditor();
       $('zoek').style.display = 'block';
       $('zoekInput').focus();
+      return;
+    }
+    if (scherm === SCHERMEN.nieuw && id === 'afh' && !['u', 'i'].includes(String(ed.value).toLowerCase())) {
+      sluitEditor();
+      $('dlgSoort').style.display = 'block';
+      $('dlgSoortOk').focus();
+      log('DOSSIERSOORT ONBEKEND');
       return;
     }
     // Bestemmingscode vult Plaats regel 1 met de zone

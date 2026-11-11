@@ -444,6 +444,10 @@ async function tabToLabel(ctrl, selector, max, timeout, waitScreen = false) {
     }
     ctrl.waitedForScreen = false;
     const d = await sendToFrame(f.tabId, f.frameId, { type: 'describeFocus' });
+    if (d?.isButton) {
+      // Cursor staat op een knop van een melding: nooit verder tabben, direct stoppen.
+      throw new Error(`BluJay toont een melding${d.melding ? `: "${d.melding}"` : ''} (cursor op ${d.text}) — gestopt zonder verder te tabben`);
+    }
     seen.push(d?.text || '?');
     if (/zoek op/i.test(d?.text || '')) throw new Error(`BluJay heeft een zoekscherm geopend (${d.text}) — een ingevulde code is waarschijnlijk onbekend`);
     if (i >= max) {
