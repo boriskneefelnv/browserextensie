@@ -371,7 +371,7 @@ async function test(name, fn) {
     // plaats achter Konditie kan maar 15 tekens bevatten (zoals in BluJay)
     assert.deepStrictEqual([m.opdr, m.ref, m.ontv, m.losadres, m.kond, m.kondplaats], ['VAT-MAAS', 'MEL-PL009999', 'TESTZON00', 'TESTZON00', 'DDP', 'ALPHEN AAN DEN ']);
     assert.match(logText, /dossier aangemaakt\]\[adres bewaard\]\[opgeslagen\]/);
-    assert.doesNotMatch(logText, /GEANNULEERD|WAREHOUSE|ZOEKSCHERM/);
+    assert.doesNotMatch(logText, /GEANNULEERD|WAREHOUSE|ZOEKSCHERM|CTRL-K MET WAARDE/);
     const codes = await sw.evaluate(async () => (await chrome.storage.local.get('ontvangerCodes')).ontvangerCodes);
     assert.deepStrictEqual(codes, { 'maxell:TESTWINKEL Supers B.V|1234AB': 'TESTZON00' }, 'nieuwe code niet onthouden');
     await up.close();

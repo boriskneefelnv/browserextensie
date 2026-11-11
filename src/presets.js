@@ -190,7 +190,7 @@ const PRESETS = [
   {
     id: 'uitslag_maxell',
     module: true,
-    version: 1,
+    version: 2,
     stepDelay: 60,
     name: 'Uitslag – Maxell',
     description: 'Klant-module Maxell (opdrachtgever VAT-MAAS). Maakt een nieuw adres aan als de ontvanger nog onbekend is.',
@@ -279,6 +279,8 @@ const PRESETS = [
       { type: 'tabTo', selector: 'focus:Ontvanger', value: '2' },
       { type: 'type', selector: 'focus', value: '{{ontvanger}}', when: '{{nieuw}} != ja' },
       // Nieuw adres: Ctrl+K → adresscherm, alles met Tab (Plaats regel 1 vult BluJay zelf met de zone, de plaats komt in regel 2)
+      // BluJay zet de opdrachtgever (VAT-MAAS) vooraf in Ontvanger; eerst leegmaken, anders opent Ctrl+K een ander menu
+      { type: 'type', selector: 'focus', value: '', when: '{{nieuw}} == ja' },
       { type: 'key', selector: 'focus', value: 'Ctrl+K', when: '{{nieuw}} == ja' },
       { type: 'tabTo', selector: 'focus:Naam regel 1', value: '0', timeout: 15000, waitScreen: true, when: '{{nieuw}} == ja' },
       { type: 'type', selector: 'focus', value: '{{adres_naam1}}', when: '{{nieuw}} == ja' },

@@ -249,6 +249,13 @@ function toets(e) {
   // Ctrl+K in Ontvanger: nieuw adres aanmaken
   if (e.ctrlKey && e.key.toLowerCase() === 'k' && actief === 'ontv') {
     e.preventDefault();
+    if (ed.value) { // gevuld veld: ander menu (zoals in BluJay)
+      log('CTRL-K MET WAARDE');
+      sluitEditor();
+      $('menu').style.display = 'block';
+      $('tv').focus();
+      return;
+    }
     sluitEditor();
     $('tv').focus();
     setTimeout(() => { render('adres'); activeer('a_n1'); }, 300);
@@ -272,7 +279,12 @@ function toets(e) {
       if (!['TOPBROUD', 'VAT-MAAS'].includes(model.opdr) || String(model.afh).toLowerCase() !== 'u') { log('dossier NIET aangemaakt'); return; }
       sluitEditor();
       $('tv').focus();
-      setTimeout(() => { log('dossier aangemaakt'); render('dossier'); activeer('d_opdr'); }, 600);
+      setTimeout(() => {
+        log('dossier aangemaakt');
+        for (const k of ['d_opdr', 'afz', 'laadadres', 'ontv', 'losadres']) model[k] = model.opdr; // BluJay neemt de opdrachtgever over
+        render('dossier');
+        activeer('d_opdr');
+      }, 600);
       return;
     }
     if (scherm === SCHERMEN.dossier && id === 'verv' && ed.value && ed.value !== 'DHL') {
