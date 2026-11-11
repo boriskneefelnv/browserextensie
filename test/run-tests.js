@@ -352,7 +352,7 @@ async function test(name, fn) {
     await sw.evaluate((presets) => chrome.storage.local.set({ macros: presets, ontvangerCodes: {}, settings: { stepDelay: 30, timeout: 5000 } }), await sw.evaluate(() => PRESETS));
     const id = await sw.evaluate(async (url) => (await chrome.tabs.query({})).find((t) => t.url === url).id, `${base}/blujay/index.html`);
     const vars = {
-      ...uitslagVars, opdrachtgever: 'VAT-MAAS', referentie: 'MEL-PL009999', ontvanger: '', losadres: '', losref: '', pallets: '', plaats: 'PROEFSTAD',
+      ...uitslagVars, opdrachtgever: 'VAT-MAAS', referentie: 'MEL-PL009999', ontvanger: '', losadres: '', losref: '', pallets: '', plaats: 'ALPHEN AAN DEN RIJN',
       klantnummer: 'maxell:TESTWINKEL Supers B.V|1234AB', adres_naam1: 'TESTWINKEL Supers B.V', adres_naam2: 'Goederenontvangst', adres_straat: 'Proefstraat 7',
       adres_postcode: '1234AB', adres_land: 'NL', adres_plaats: 'PROEFSTAD', adres_contact: 'verkoop@example.com', adres_telefoon: '+00 44 1000 200300', adres_email: 'verkoop@example.com',
     };
@@ -368,7 +368,8 @@ async function test(name, fn) {
       [m.a_n1, m.a_n2, m.a_n3, m.a_a1, m.a_pc, m.a_best, m.a_pl1, m.a_pl2, m.a_land, m.a_naam, m.a_tel, m.a_mail, m.a_web],
       ['TESTWINKEL Supers B.V', 'Goederenontvangst', '', 'Proefstraat 7', '1234AB', 'NL', 'ZONE NL', 'PROEFSTAD', 'NL', 'verkoop@example.com', '+00 44 1000 200300', 'verkoop@example.com', '']
     );
-    assert.deepStrictEqual([m.opdr, m.ref, m.ontv, m.losadres, m.kond, m.kondplaats], ['VAT-MAAS', 'MEL-PL009999', 'TESTZON00', 'TESTZON00', 'DDP', 'PROEFSTAD']);
+    // plaats achter Konditie kan maar 15 tekens bevatten (zoals in BluJay)
+    assert.deepStrictEqual([m.opdr, m.ref, m.ontv, m.losadres, m.kond, m.kondplaats], ['VAT-MAAS', 'MEL-PL009999', 'TESTZON00', 'TESTZON00', 'DDP', 'ALPHEN AAN DEN ']);
     assert.match(logText, /dossier aangemaakt\]\[adres bewaard\]\[opgeslagen\]/);
     assert.doesNotMatch(logText, /GEANNULEERD|WAREHOUSE|ZOEKSCHERM/);
     const codes = await sw.evaluate(async () => (await chrome.storage.local.get('ontvangerCodes')).ontvangerCodes);

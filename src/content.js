@@ -589,7 +589,11 @@
     const typedTag = Math.random().toString(36).slice(2);
     typedEls.set(typedTag, el);
     setTimeout(() => typedEls.delete(typedTag), 15000);
-    return { __real: true, typedTag, focused: document.activeElement === el, hadValue: 'value' in el ? el.value !== '' : !!el.textContent };
+    return {
+      __real: true, typedTag, focused: document.activeElement === el,
+      hadValue: 'value' in el ? el.value !== '' : !!el.textContent,
+      maxLength: el.maxLength > 0 ? el.maxLength : null, // BluJay-velden hebben vaak een maximaal aantal tekens
+    };
   }
 
   async function exec(step) {

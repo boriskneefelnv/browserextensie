@@ -365,6 +365,12 @@ async function verifyTyped(ctrl, where, expected, typedTag) {
     if (r.isCheckbox) throw new Error(`het veld is een vinkje (checkbox), geen tekstveld — tekst "${expected}" niet getypt`);
     if (valuesMatch(r.value, expected)) return;
     if (typedTag && !r.stillFocused) return; // BluJay heeft de invoer al verwerkt en is verder gegaan
+    // Door BluJay afgekapt (veld te kort): het begin van de tekst staat er wel → goed, met opmerking
+    const act = String(r.value ?? '');
+    if (act.trim().length >= Math.min(4, String(expected).length) && String(expected).toLowerCase().startsWith(act.toLowerCase())) {
+      ctrl.trace.push(`   let op: BluJay heeft de tekst afgekapt (veld te kort) → "${act}"`);
+      return;
+    }
     last = r.value;
     await sleep(150);
   }
@@ -608,8 +614,15 @@ async function runStep(ctrl, step, vars, settings, label) {
         } else if (step.type === 'key') await cdpKey(where.tabId, value || 'Enter');
         else if (value === '') { if (res.value.hadValue) await cdpKey(where.tabId, 'Backspace'); }
         else {
-          await cdpText(where.tabId, value);
-          await verifyTyped(ctrl, where, value, res.value.typedTag);
+          let tekst = value;
+          const max = res.value.maxLength;
+          if (max && tekst.length > max) {
+            // Past niet: alleen typen wat in het veld past (BluJay zou het anders zelf afkappen)
+            tekst = tekst.slice(0, max);
+            ctrl.trace.push(`   let op: dit veld kan maar ${max} tekens bevatten → "${tekst}"`);
+          }
+          await cdpText(where.tabId, tekst);
+          await verifyTyped(ctrl, where, tekst, res.value.typedTag);
         }
         return;
       } catch (e) {
