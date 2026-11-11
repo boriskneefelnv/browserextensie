@@ -190,7 +190,7 @@ const PRESETS = [
   {
     id: 'uitslag_maxell',
     module: true,
-    version: 4,
+    version: 5,
     stepDelay: 60,
     name: 'Uitslag – Maxell',
     description: 'Klant-module Maxell (opdrachtgever VAT-MAAS). Maakt een nieuw adres aan als de ontvanger nog onbekend is.',
@@ -309,10 +309,14 @@ const PRESETS = [
       { type: 'key', selector: 'focus', value: 'Enter', when: '{{nieuw}} == ja' },
       { type: 'wait', value: '1500', when: '{{nieuw}} == ja' },
       { type: 'key', selector: 'body', value: 'Enter', when: '{{nieuw}} == ja && !bestaat: text=OK' },
-      // Meldingen: "Geen valide resultaten…" → OK, dan Bevestigen, dan "Bewaar ontvanger als herbruikbaar" → OK
-      { type: 'click', selector: 'text=OK', timeout: 15000, when: '{{nieuw}} == ja' },
-      { type: 'click', selector: 'text=Bevestigen', timeout: 15000, when: '{{nieuw}} == ja' },
-      { type: 'click', selector: 'text=OK', timeout: 15000, when: '{{nieuw}} == ja' },
+      // Meldingen. Is het adres niet te valideren: "Geen valide resultaten…" → OK → Bevestigen.
+      // Daarna (en bij een gevalideerd adres meteen): "Bewaar ontvanger als herbruikbaar" → OK.
+      { type: 'waitFor', selector: 'contains=Geen valide resultaten || contains=Bewaar ontvanger', timeout: 15000, when: '{{nieuw}} == ja' },
+      { type: 'setVar', variable: 'nietvalide', value: 'ja', when: '{{nieuw}} == ja && bestaat: contains=Geen valide resultaten' },
+      { type: 'click', selector: 'text=OK', near: 'Geen valide resultaten', when: '{{nieuw}} == ja && {{nietvalide}} == ja' },
+      { type: 'click', selector: 'text=Bevestigen', timeout: 15000, when: '{{nieuw}} == ja && {{nietvalide}} == ja' },
+      { type: 'waitFor', selector: 'contains=Bewaar ontvanger', timeout: 15000, when: '{{nieuw}} == ja' },
+      { type: 'click', selector: 'text=OK', near: 'Bewaar ontvanger', when: '{{nieuw}} == ja' },
       // Escape → terug in het dossier; Ontvanger én Losadres hebben nu de nieuwe code. Die onthouden voor de volgende keer.
       { type: 'key', selector: 'body', value: 'Escape', when: '{{nieuw}} == ja' },
       { type: 'read', selector: 'focus:Losadres', pattern: '(\\S{3,})', variable: 'nieuwecode', timeout: 15000, when: '{{nieuw}} == ja' },

@@ -372,10 +372,33 @@ async function test(name, fn) {
     // plaats achter Konditie kan maar 15 tekens bevatten (zoals in BluJay)
     assert.deepStrictEqual([m.opdr, m.ref, m.ontv, m.losadres, m.kond, m.kondplaats], ['VAT-MAAS', 'MEL-PL009999', 'TESTZON00', 'TESTZON00', 'DDP', 'ALPHEN AAN DEN ']);
     // 1e Enter sluit het adresveld af, de 2e Enter geeft de melding → OK / Bevestigen / OK → bewaard; daarna dossier opgeslagen
-    assert.match(logText, /dossier aangemaakt\]\[adresveld afgesloten\]\[adres bewaard\]\[opgeslagen\]/);
+    assert.match(logText, /dossier aangemaakt\]\[adresveld afgesloten\]\[bevestigd\]\[adres bewaard\]\[opgeslagen\]/);
     assert.doesNotMatch(logText, /GEANNULEERD|WAREHOUSE|ZOEKSCHERM|CTRL-K MET WAARDE|CTRL-K ZONDER CTRL-TOETS/);
     const codes = await sw.evaluate(async () => (await chrome.storage.local.get('ontvangerCodes')).ontvangerCodes);
     assert.deepStrictEqual(codes, { 'maxell:TESTWINKEL Supers B.V|1234AB': 'TESTZON00' }, 'nieuwe code niet onthouden');
+    await up.close();
+  });
+
+  await test('Uitslagdossier met NIEUW adres dat BluJay valideert (direct "Bewaar ontvanger", geen Bevestigen)', async () => {
+    const up = await context.newPage();
+    await up.goto(`${base}/blujay/index.html`);
+    await up.waitForTimeout(500);
+    await sw.evaluate((presets) => chrome.storage.local.set({ macros: presets, ontvangerCodes: {}, settings: { stepDelay: 30, timeout: 5000 } }), await sw.evaluate(() => PRESETS));
+    const id = await sw.evaluate(async (url) => (await chrome.tabs.query({})).find((t) => t.url === url).id, `${base}/blujay/index.html`);
+    const vars = {
+      ...uitslagVars, opdrachtgever: 'VAT-MAAS', referentie: 'MEL-PL005175', ontvanger: '', losadres: '', losref: '', pallets: '', plaats: 'ALPHEN AAN DEN RIJN',
+      klantnummer: 'maxell:ZEEMAN TextielSupers B.V|2405XX', adres_naam1: 'ZEEMAN TextielSupers B.V', adres_naam2: 'Goederenontvangst', adres_straat: 'De Schans 15',
+      adres_postcode: '2405XX', adres_land: 'NL', adres_plaats: 'ALPHEN AAN DEN RIJN', adres_contact: 'sales@maxell.eu', adres_telefoon: '+00 44 1628 412012', adres_email: 'sales@maxell.eu',
+    };
+    const res = await sw.evaluate(({ id, vars }) => runMacro(id, 'uitslag_maxell', vars, 'test'), { id, vars });
+    const m = await up.evaluate(() => ({ ...window.model }));
+    const logText = await up.textContent('#log');
+    assert.ok(res.ok, res.error + ' | ' + logText);
+    assert.deepStrictEqual([m.ontv, m.losadres], ['ZEEMZON00', 'ZEEMZON00']);
+    assert.match(logText, /dossier aangemaakt\]\[adresveld afgesloten\]\[adres bewaard\]\[opgeslagen\]/);
+    assert.doesNotMatch(logText, /bevestigd|GEANNULEERD|CTRL-K/);
+    const codes = await sw.evaluate(async () => (await chrome.storage.local.get('ontvangerCodes')).ontvangerCodes);
+    assert.deepStrictEqual(codes, { 'maxell:ZEEMAN TextielSupers B.V|2405XX': 'ZEEMZON00' });
     await up.close();
   });
 

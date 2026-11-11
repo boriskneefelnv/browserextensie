@@ -349,7 +349,13 @@ let adresMelding = false;
 $('tv').addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' || scherm !== SCHERMEN.adres || adresMelding) return;
   adresMelding = true;
-  setTimeout(() => toonMelding('Geen valide resultaten gevonden voor ontvanger, aanmaken?', () => { $('bevestig').style.display = 'block'; }), 300);
+  if (/^TESTWINKEL/i.test(model.a_n1)) {
+    // Adres niet te valideren: eerst "Geen valide resultaten…" → OK → Bevestigen → "Bewaar ontvanger…"
+    setTimeout(() => toonMelding('Geen valide resultaten gevonden voor ontvanger, aanmaken?', () => { $('bevestig').style.display = 'block'; }), 300);
+  } else {
+    // Gevalideerd adres: meteen "Bewaar ontvanger als herbruikbaar"
+    setTimeout(() => toonMelding('Bewaar ontvanger als herbruikbaar', () => { adresBewaard = true; log('adres bewaard'); }), 300);
+  }
 });
 
 // ---------------------------------------------------------------- meldingen bij nieuw adres
@@ -363,6 +369,7 @@ function toonMelding(tekst, ok) {
 $('mOk').addEventListener('click', () => { $('melding').style.display = 'none'; $('tv').focus(); const h = $('melding').okHandler; setTimeout(h, 200); });
 $('mAnnuleren').addEventListener('click', () => { $('melding').style.display = 'none'; log('GEANNULEERD'); });
 $('bevestig').addEventListener('click', () => {
+  log('bevestigd');
   $('bevestig').style.display = 'none';
   $('tv').focus();
   setTimeout(() => toonMelding('Bewaar ontvanger als herbruikbaar', () => { adresBewaard = true; log('adres bewaard'); }), 200);
