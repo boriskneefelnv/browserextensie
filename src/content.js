@@ -461,6 +461,16 @@
   }
 
   function pressKey(el, keyName) {
+    // Toetscombinatie (bijv. Ctrl+K) als nagebootste toets met modifier
+    const delen = String(keyName).split('+').map((x) => x.trim());
+    if (delen.length > 1 && delen.slice(0, -1).every((m) => /^(ctrl|control|alt|shift|meta)$/i.test(m))) {
+      const mods = delen.slice(0, -1).map((m) => m.toLowerCase());
+      const k = delen[delen.length - 1];
+      const init = { key: k.length === 1 ? k.toLowerCase() : k, ctrlKey: mods.some((m) => m.startsWith('c')), altKey: mods.includes('alt'), shiftKey: mods.includes('shift'), metaKey: mods.includes('meta'), bubbles: true, cancelable: true, composed: true, keyCode: k.toUpperCase().charCodeAt(0) };
+      el.dispatchEvent(new KeyboardEvent('keydown', init));
+      el.dispatchEvent(new KeyboardEvent('keyup', init));
+      return;
+    }
     const name = { enter: 'Enter', tab: 'Tab', esc: 'Escape', escape: 'Escape', spatie: ' ', space: ' ' }[keyName.toLowerCase()] || keyName;
     if (typeof el.focus === 'function') el.focus();
     const notPrevented = key(el, name, 'keydown');
@@ -741,7 +751,7 @@
     }
     if (best) {
       const v = best instanceof HTMLInputElement || best instanceof HTMLTextAreaElement ? best.value : directText(best);
-      return norm(v).slice(0, 40);
+      return norm(v).slice(0, 80);
     }
     let label = '';
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -750,7 +760,7 @@
       if (el.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING) break;
       if (norm(n.data)) label = norm(n.data);
     }
-    return label.slice(0, 40);
+    return label.slice(0, 80);
   }
 
   function describeEl(el) {
@@ -771,7 +781,7 @@
       ro: el.readOnly || undefined,
       dis: el.disabled || undefined,
       label: isField ? labelFor(el) : undefined,
-      text: isField ? undefined : norm(el.innerText || el.textContent).slice(0, 40) || undefined,
+      text: isField ? undefined : norm(el.innerText || el.textContent).slice(0, 80) || undefined,
       value: value === undefined ? undefined : String(value).slice(0, 60),
       pos: `${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)}`,
     };

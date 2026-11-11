@@ -55,6 +55,10 @@
   <div>Instructies overig</div><div id="instrItem">Instructies uitslag</div><div>Opmerkingen</div>
 </div>
 <div id="popup"><b>Instructies uitslag</b><br><input id="instr" style="width:300px"><div id="instrSaved"></div></div>
+<div id="melding" style="position:absolute;left:220px;top:200px;width:400px;border:2px solid #1f5c97;background:#fff;padding:8px;display:none">
+  <div class="tekst"></div><br><input type="button" id="mOk" value="OK"> <input type="button" id="mAnnuleren" value="Annuleren">
+</div>
+<input type="button" id="bevestig" value="Bevestigen" style="position:absolute;left:211px;top:42px;display:none">
 <div id="zoek"><b>Zoek op adressen</b><br><input id="zoekInput" style="width:300px"></div>
 <pre id="log" style="position:absolute;left:220px;top:640px"></pre>
 <script>
@@ -85,6 +89,21 @@ const SCHERMEN = {
       ['sjab', 'Sjabloon', 367, 255, 200, ''],
     ],
     volgorde: ['afh', 'soort', 'opdr', 'sjab'],
+  },
+  adres: {
+    kop: 'Ontvanger aanmaken',
+    velden: [
+      ['a_n1', 'Naam regel 1', 368, 194, 222, ''], ['a_n2', 'Naam regel 2', 368, 211, 222, ''], ['a_n3', 'Naam regel 3', 368, 228, 222, ''],
+      ['a_a1', 'Adres regel 1', 368, 246, 222, ''], ['a_a2', 'Adres regel 2', 368, 263, 222, ''], ['a_a3', 'Adres regel 3', 368, 280, 222, ''],
+      ['a_pc', 'Postcode', 368, 298, 56, ''], ['a_best', 'Bestemmingscode', 745, 298, 30, ''],
+      ['a_pl1', 'Plaats regel 1', 368, 315, 222, ''], ['a_pl2', 'Plaats regel 2', 368, 332, 222, ''],
+      ['a_land', 'Land', 368, 350, 17, 'NL'], ['a_geb', 'Gebiedscode', 745, 350, 56, ''],
+      ['a_naam', 'Naam', 368, 436, 222, ''], ['a_taal', 'Taalcode', 745, 436, 11, '1'],
+      ['a_tel', 'Telefoonnummer', 368, 454, 126, ''], ['a_fax', 'Fax nummer', 368, 471, 126, ''], ['a_telex', 'Telex nummer', 368, 488, 126, ''],
+      ['a_mail', 'E-mail adres', 368, 506, 323, ''], ['a_web', 'Internetadres', 368, 523, 323, ''],
+    ],
+    volgorde: ['a_n1', 'a_n2', 'a_n3', 'a_a1', 'a_a2', 'a_a3', 'a_pc', 'a_best', 'a_pl1', 'a_pl2', 'a_land', 'a_geb', 'a_naam', 'a_taal',
+      'a_tel', 'a_fax', 'a_telex', 'a_mail', 'a_web'],
   },
   dossier: {
     kop: 'Dossiernummer 60123456',
@@ -211,6 +230,14 @@ function volgende(id) {
 }
 
 function toets(e) {
+  // Ctrl+K in Ontvanger: nieuw adres aanmaken
+  if (e.ctrlKey && e.key.toLowerCase() === 'k' && actief === 'ontv') {
+    e.preventDefault();
+    sluitEditor();
+    $('tv').focus();
+    setTimeout(() => { render('adres'); activeer('a_n1'); }, 300);
+    return;
+  }
   if (e.key === 'Tab') {
     e.preventDefault();
     const id = actief;
@@ -226,7 +253,7 @@ function toets(e) {
       return;
     }
     if (scherm === SCHERMEN.nieuw && id === 'sjab') {
-      if (model.opdr !== 'TOPBROUD' || String(model.afh).toLowerCase() !== 'u') { log('dossier NIET aangemaakt'); return; }
+      if (!['TOPBROUD', 'VAT-MAAS'].includes(model.opdr) || String(model.afh).toLowerCase() !== 'u') { log('dossier NIET aangemaakt'); return; }
       sluitEditor();
       $('tv').focus();
       setTimeout(() => { log('dossier aangemaakt'); render('dossier'); activeer('d_opdr'); }, 600);
@@ -238,6 +265,8 @@ function toets(e) {
       $('zoekInput').focus();
       return;
     }
+    // Bestemmingscode vult Plaats regel 1 met de zone
+    if (scherm === SCHERMEN.adres && id === 'a_best' && ed.value && !model.a_pl1) model.a_pl1 = 'ZONE ' + ed.value.toUpperCase();
     volgende(id);
   } else if (e.key === 'Enter') {
     e.preventDefault();
@@ -245,12 +274,45 @@ function toets(e) {
   }
 }
 
+let adresBewaard = false;
 function opslaan() {
+  if (scherm === SCHERMEN.adres) {
+    sluitEditor();
+    $('tv').focus();
+    setTimeout(() => toonMelding('Geen valide resultaten gevonden voor ontvanger, aanmaken?', () => { $('bevestig').style.display = 'block'; }), 300);
+    return;
+  }
   if (scherm !== SCHERMEN.dossier) return;
   sluitEditor();
   $('tv').focus();
   log('opgeslagen');
 }
+
+// ---------------------------------------------------------------- meldingen bij nieuw adres
+function toonMelding(tekst, ok) {
+  const d = $('melding');
+  d.style.display = 'block';
+  d.querySelector('.tekst').textContent = tekst;
+  d.okHandler = ok;
+  $('mAnnuleren').focus(); // zoals BluJay: de cursor staat op Annuleren
+}
+$('mOk').addEventListener('click', () => { $('melding').style.display = 'none'; $('tv').focus(); const h = $('melding').okHandler; setTimeout(h, 200); });
+$('mAnnuleren').addEventListener('click', () => { $('melding').style.display = 'none'; log('GEANNULEERD'); });
+$('bevestig').addEventListener('click', () => {
+  $('bevestig').style.display = 'none';
+  $('tv').focus();
+  setTimeout(() => toonMelding('Bewaar ontvanger als herbruikbaar', () => { adresBewaard = true; log('adres bewaard'); }), 200);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !adresBewaard || scherm !== SCHERMEN.adres) return;
+  const code = (String(model.a_n1).replace(/[^A-Za-z]/g, '').slice(0, 4) + String(model.a_pl1).replace(/[^A-Za-z]/g, '').slice(0, 3)).toUpperCase() + '00';
+  render('dossier');
+  model.ontv = code;
+  model.losadres = code;
+  box('ontv').textContent = code;
+  box('losadres').textContent = code;
+  activeer('losadres');
+});
 
 // ---------------------------------------------------------------- zijbalk, menu, valkuilen
 $('uitslagKop').addEventListener('click', (e) => {

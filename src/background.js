@@ -285,7 +285,22 @@ async function cdpDetachAll(ctrl) {
 
 const cdp = (tabId, method, params) => chrome.debugger.sendCommand({ tabId }, method, params);
 
+const MOD_BITS = { alt: 1, ctrl: 2, control: 2, meta: 4, cmd: 4, shift: 8 };
+
 async function cdpKey(tabId, name) {
+  // Toetscombinatie, bijv. "Ctrl+K"
+  const delen = String(name).split('+').map((x) => x.trim()).filter(Boolean);
+  if (delen.length > 1 && delen.slice(0, -1).every((m) => MOD_BITS[m.toLowerCase()])) {
+    const modifiers = delen.slice(0, -1).reduce((acc, m) => acc | MOD_BITS[m.toLowerCase()], 0);
+    const last = delen[delen.length - 1];
+    const known = CDP_KEYS[KEY_ALIASES[last.toLowerCase()] || last];
+    const key = known ? (KEY_ALIASES[last.toLowerCase()] || last) : last.length === 1 ? last.toLowerCase() : last;
+    const code = known ? known.code : /^[a-z]$/i.test(last) ? 'Key' + last.toUpperCase() : /^\d$/.test(last) ? 'Digit' + last : last;
+    const vk = known ? known.keyCode : last.length === 1 ? last.toUpperCase().charCodeAt(0) : 0;
+    await cdp(tabId, 'Input.dispatchKeyEvent', { type: 'rawKeyDown', key, code, modifiers, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
+    await cdp(tabId, 'Input.dispatchKeyEvent', { type: 'keyUp', key, code, modifiers, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
+    return;
+  }
   const key = KEY_ALIASES[String(name).toLowerCase()] || name;
   const k = CDP_KEYS[key];
   if (!k && key.length === 1) return cdpText(tabId, key);
@@ -315,6 +330,11 @@ async function cdpText(tabId, text) {
 
 /** Voorwaarde "Alleen als": gewone vergelijking, of "bestaat: <selector>" / "!bestaat: <selector>". */
 async function checkWhen(ctrl, when, vars) {
+  const delen = String(when).split(/\s*&&\s*/);
+  if (delen.length > 1) {
+    for (const d of delen) if (!(await checkWhen(ctrl, d, vars))) return false;
+    return true;
+  }
   const m = String(when).trim().match(/^(!|niet\s+)?bestaat\s*:\s*(.+)$/i);
   if (!m) return BA.evalCondition(when, vars);
   const found = await locate(ctrl, BA.fillTemplate(m[2], vars), { timeout: 0 });
@@ -492,6 +512,17 @@ async function runStep(ctrl, step, vars, settings, label) {
     case 'setVar':
       if (step.variable) vars[step.variable] = fill(step.value);
       return;
+    case 'remember': {
+      // Blijvend bewaren, bijv. ontvangerCodes[klantnummer] = nieuwe code
+      const lijst = step.variable || 'onthouden';
+      const sleutel = fill(step.key);
+      const waarde = fill(step.value);
+      if (!sleutel || !waarde || /\{\{/.test(sleutel + waarde)) return;
+      const data = (await chrome.storage.local.get(lijst))[lijst] || {};
+      data[sleutel] = waarde;
+      await chrome.storage.local.set({ [lijst]: data });
+      return;
+    }
     case 'notify':
       toastAll(ctrl, fill(step.value), 'info');
       return;

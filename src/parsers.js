@@ -18,6 +18,26 @@ var BAParsers = (() => {
     K1300650: 'ACTIOBIB', // Action Service & Distribution B.V. (DE), Biblis
   };
 
+  /** Landnaam → landcode (voor Bestemmingscode/Land in BluJay). */
+  const LANDEN = {
+    netherlands: 'NL', nederland: 'NL', holland: 'NL', 'the netherlands': 'NL',
+    belgium: 'BE', belgie: 'BE', 'belgië': 'BE', belgique: 'BE',
+    germany: 'DE', deutschland: 'DE', duitsland: 'DE',
+    france: 'FR', frankrijk: 'FR', luxembourg: 'LU', luxemburg: 'LU',
+    'united kingdom': 'GB', uk: 'GB', 'great britain': 'GB', england: 'GB',
+    austria: 'AT', 'österreich': 'AT', poland: 'PL', polen: 'PL', spain: 'ES', italy: 'IT', denmark: 'DK',
+  };
+  const landcode = (naam) => LANDEN[String(naam || '').trim().toLowerCase()] || (/^[A-Z]{2}$/.test(String(naam || '').trim()) ? naam.trim() : '');
+
+  /** Postcode + plaats uit één regel ("2405 XX ALPHEN AAN DEN RIJN", "68647 Biblis"). */
+  function postcodePlaats(regel) {
+    let m = String(regel || '').match(/^(\d{4})\s?([A-Z]{2})\s+(.+)$/);
+    if (m) return { postcode: m[1] + m[2], plaats: m[3].trim() };
+    m = String(regel || '').match(/^(\d{4,5})\s+(.+)$/);
+    if (m) return { postcode: m[1], plaats: m[2].trim() };
+    return null;
+  }
+
   /** Afleveradres-blok: regels na het klantnummer bovenaan (linkerkolom). */
   function addressBlock(lines, klantnummer) {
     const start = lines.findIndex((l) => klantnummer && cols(l)[0] === klantnummer);
@@ -60,16 +80,74 @@ var BAParsers = (() => {
           palletsoort: 'EP',
           klantnummer,
           afnemer: [adres.naam, adres.plaats].filter(Boolean).join(', '),
+          adres_naam1: adres.naam || '',
+          adres_naam2: '',
+          adres_straat: adres.straat || '',
+          adres_postcode: String(adres.postcode || '').replace(/\s+/g, ''),
+          adres_land: landcode(adres.land) || '',
+          adres_plaats: adres.plaats || '',
+          adres_contact: '',
+          adres_telefoon: '',
+          adres_email: '',
+        };
+      },
+    },
+    {
+      id: 'maxell',
+      naam: 'Maxell',
+      herken: (t) => /maxell europe/i.test(t) && /picking list/i.test(t),
+      lees(text, lines, bestandsnaam = '') {
+        // Afleveradres: linkerkolom onder "Customer" tot "Item number"; rechterkolom-labels overslaan.
+        const start = lines.findIndex((l) => /^customer\b/i.test(cols(l)[0] || ''));
+        const RECHTS = /^(picking route|orderer|activation date|end date|mode of delivery|delivery terms|page)\b/i;
+        const blok = [];
+        for (let i = start + 1; start >= 0 && i < lines.length; i++) {
+          const c = cols(lines[i])[0] || '';
+          if (/^item number/i.test(c)) break;
+          if (!c || RECHTS.test(c)) continue;
+          blok.push(c);
+        }
+        const pcIdx = blok.findIndex((r) => postcodePlaats(r));
+        const pc = pcIdx >= 0 ? postcodePlaats(blok[pcIdx]) : { postcode: '', plaats: '' };
+        const straat = pcIdx > 0 ? blok[pcIdx - 1] : '';
+        const namen = pcIdx > 1 ? blok.slice(0, pcIdx - 1) : blok.slice(0, 1);
+        const land = landcode(pcIdx >= 0 ? blok[pcIdx + 1] : '') || 'NL';
+        // Leverdatum staat niet in de PDF, wel in de bestandsnaam: "..._Delivery_18.11.26.pdf"
+        const lev = String(bestandsnaam).match(/Delivery[_ -]?(\d{1,2})[.-](\d{1,2})[.-](\d{2,4})/i);
+        const losdatum = lev ? `${lev[1].padStart(2, '0')}-${lev[2].padStart(2, '0')}-${lev[3].length === 2 ? '20' + lev[3] : lev[3]}` : '';
+        const telefoon = first(text, /\bPh:?\s*(\+?[\d ()-]{6,}\d)/i);
+        const email = first(text, /\bE-?mail:?\s*([\w.+-]+@[\w.-]+\.\w+)/i);
+        return {
+          opdrachtgever: 'VAT-MAAS', // Maxell heeft (nog) geen eigen relatie in BluJay
+          laadadres: 'NEELEMAA3',
+          konditie: first(text, /Delivery terms\s+([A-Z]{3})\b/i) || 'DDP',
+          plaats: pc.plaats,
+          referentie: first(text, /Picking List\s+([A-Z]{2,}-[A-Z]{2,}\d+)/i),
+          losref: '',
+          pallets: '',
+          palletsoort: 'EP',
+          losdatum,
+          klantnummer: `${namen[0] || ''}|${pc.postcode}`, // geen klantnummer in de PDF: naam + postcode
+          afnemer: [namen[0], pc.plaats].filter(Boolean).join(', '),
+          adres_naam1: namen[0] || '',
+          adres_naam2: namen[1] || '',
+          adres_straat: straat,
+          adres_postcode: pc.postcode,
+          adres_land: land,
+          adres_plaats: pc.plaats,
+          adres_contact: email,
+          adres_telefoon: telefoon,
+          adres_email: email,
         };
       },
     },
   ];
 
   /** Herkent de klant en leest de waarden. Geeft { klant, waarden } of { klant: null }. */
-  function parse(text, lines, geleerdeOntvangers = {}) {
+  function parse(text, lines, geleerdeOntvangers = {}, bestandsnaam = '') {
     const klant = KLANTEN.find((k) => k.herken(text));
     if (!klant) return { klant: null, waarden: {} };
-    const waarden = klant.lees(text, lines || text.split('\n'));
+    const waarden = klant.lees(text, lines || text.split('\n'), bestandsnaam);
     const codes = { ...ONTVANGERS, ...geleerdeOntvangers };
     if (waarden.klantnummer && codes[waarden.klantnummer]) {
       waarden.ontvanger = codes[waarden.klantnummer];

@@ -97,6 +97,7 @@ function makeInput(m, inp) {
     'data-type': type,
     'data-label': inp.label || inp.name,
     'data-required': inp.required ? '1' : null,
+    'data-required-unless': inp.requiredUnless || null,
     title: inp.label || inp.name,
     placeholder: type === 'date' ? 'dd-mm-jjjj' : type === 'time' ? (inp.placeholder || 'uu:mm') : type === 'text' ? inp.placeholder || '' : null,
     inputmode: smart ? 'numeric' : null,
@@ -154,6 +155,15 @@ function collectVars(box) {
     vars[input.dataset.name] = v;
     if (input.dataset.type === 'month' && v) months.push({ label: input.dataset.label, v });
   }
+  // Verplicht, tenzij een ander veld is ingevuld (bijv. Ontvanger leeg mag als er adresgegevens zijn)
+  for (const input of box.querySelectorAll('input[data-required-unless]')) {
+    if (!input.value.trim() && !vars[input.dataset.requiredUnless]) {
+      input.classList.add('missing');
+      input.focus();
+      throw new Error(`Vul "${input.dataset.label}" in, of de gegevens voor een nieuw adres.`);
+    }
+  }
+  if (box.dataset.klantnummer) vars.klantnummer = box.dataset.klantnummer;
   for (let i = 1; i < months.length; i++) {
     if (months[i].v < months[i - 1].v) throw new Error(`"${months[i].label}" ligt vóór "${months[i - 1].label}".`);
   }
@@ -171,7 +181,7 @@ async function readPdf(file, box, m, status) {
     const data = new Uint8Array(await file.arrayBuffer());
     const { text, lines } = await BAPdf.extract(data, PDF_BASE);
     const { ontvangerCodes = {} } = await chrome.storage.local.get('ontvangerCodes');
-    const { klant, waarden } = BAParsers.parse(text, lines, ontvangerCodes);
+    const { klant, waarden } = BAParsers.parse(text, lines, ontvangerCodes, file.name);
     if (!klant) {
       status.className = 'pdfstatus fail';
       status.textContent = `✖ Klant niet herkend in "${file.name}". Deze klant is nog niet ingesteld.`;
@@ -181,7 +191,10 @@ async function readPdf(file, box, m, status) {
     for (const inp of m.inputs) {
       const input = box.querySelector(`input[data-name="${inp.name}"]`);
       if (!input) continue;
-      if (Object.prototype.hasOwnProperty.call(waarden, inp.name)) input.value = waarden[inp.name] ?? '';
+      if (Object.prototype.hasOwnProperty.call(waarden, inp.name)) {
+        // datums uit de pakbon (bijv. leverdatum) alleen invullen als er iets gevonden is
+        if (!(['date', 'time'].includes(inp.type) && !waarden[inp.name])) input.value = waarden[inp.name] ?? '';
+      }
       else if (!['date', 'time'].includes(inp.type)) input.value = BA.fillTemplate(inp.default || '', BA.builtinVars());
       input.classList.toggle('missing', !!inp.required && !input.value);
     }

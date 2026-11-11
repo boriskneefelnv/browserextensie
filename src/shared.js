@@ -25,6 +25,7 @@ var BA = (() => {
     setVar: { label: 'Zet variabele', selector: false, value: true, variable: true, help: 'Geef een variabele een waarde.' },
     navigate: { label: 'Ga naar URL', selector: false, value: true, help: 'Open een adres in het huidige tabblad.' },
     notify: { label: 'Melding', selector: false, value: true, help: 'Toon een melding op de pagina.' },
+    remember: { label: 'Onthoud waarde', selector: false, value: true, variable: true, help: 'Bewaar een waarde blijvend (bijv. een nieuwe ontvanger-code per afnemer). Variabele = lijst (bijv. ontvangerCodes), Sleutel = bijv. {{klantnummer}}, Waarde = bijv. {{nieuwecode}}.' },
     stop: { label: 'Stop handeling', selector: false, value: false, help: 'Stop de handeling (meestal samen met "Alleen als").' },
   };
 
@@ -123,6 +124,9 @@ var BA = (() => {
    * Vergelijking is hoofdletterongevoelig.
    */
   function evalCondition(expr, vars) {
+    // Meerdere voorwaarden met && (allemaal waar)
+    const delen = String(expr ?? '').split(/\s*&&\s*/);
+    if (delen.length > 1) return delen.every((d) => evalCondition(d, vars));
     const filled = fillTemplate(expr, vars).trim();
     if (!filled) return true;
     const m = filled.match(/^(.*?)\s*(==|!=|!~|~)\s*(.*)$/s);

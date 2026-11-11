@@ -314,6 +314,55 @@ async function test(name, fn) {
     await up.close();
   });
 
+  await test('Maxell-pakbon inlezen: VAT-MAAS, leverdatum uit bestandsnaam, adresgegevens, Ontvanger leeg', async () => {
+    await sw.evaluate((presets) => chrome.storage.local.set({ macros: presets, ontvangerCodes: {} }), await sw.evaluate(() => PRESETS));
+    const extId = new URL(sw.url()).host;
+    const panel = await context.newPage();
+    await panel.goto(`chrome-extension://${extId}/src/popup/popup.html`);
+    await panel.locator('#macroList .item', { hasText: 'Uitslagdossier aanmaken' }).click();
+    const card = panel.locator('#detail');
+    await card.locator('input[type=file]').setInputFiles(path.join(__dirname, 'fixtures/Test_Picking_List_MEL-PL009999_Delivery_18.11.26.pdf'));
+    await card.locator('.pdfstatus.ok').waitFor({ timeout: 15000 });
+    const val = (n) => card.locator(`input[data-name="${n}"]`).inputValue();
+    assert.match(await card.locator('.pdfstatus').textContent(), /Maxell → TESTWINKEL Supers B\.V, PROEFSTAD/);
+    assert.deepStrictEqual(
+      await Promise.all(['opdrachtgever', 'referentie', 'konditie', 'plaats', 'losdatum', 'ontvanger', 'adres_naam1', 'adres_naam2', 'adres_straat', 'adres_postcode', 'adres_land', 'adres_plaats', 'adres_contact', 'adres_telefoon', 'adres_email'].map(val)),
+      ['VAT-MAAS', 'MEL-PL009999', 'DDP', 'PROEFSTAD', '18-11-2026', '', 'TESTWINKEL Supers B.V', 'Goederenontvangst', 'Proefstraat 7', '1234AB', 'NL', 'PROEFSTAD', 'verkoop@example.com', '+00 44 1000 200300', 'verkoop@example.com']
+    );
+    await panel.close();
+  });
+
+  await test('Uitslagdossier met NIEUW adres (Ctrl+K, meldingen OK/Bevestigen/OK, code onthouden)', async () => {
+    const up = await context.newPage();
+    await up.goto(`${base}/blujay/index.html`);
+    await up.waitForTimeout(500);
+    await sw.evaluate((presets) => chrome.storage.local.set({ macros: presets, ontvangerCodes: {}, settings: { stepDelay: 30, timeout: 5000 } }), await sw.evaluate(() => PRESETS));
+    const id = await sw.evaluate(async (url) => (await chrome.tabs.query({})).find((t) => t.url === url).id, `${base}/blujay/index.html`);
+    const vars = {
+      ...uitslagVars, opdrachtgever: 'VAT-MAAS', referentie: 'MEL-PL009999', ontvanger: '', losadres: '', losref: '', pallets: '', plaats: 'PROEFSTAD',
+      klantnummer: 'TESTWINKEL Supers B.V|1234AB', adres_naam1: 'TESTWINKEL Supers B.V', adres_naam2: 'Goederenontvangst', adres_straat: 'Proefstraat 7',
+      adres_postcode: '1234AB', adres_land: 'NL', adres_plaats: 'PROEFSTAD', adres_contact: 'verkoop@example.com', adres_telefoon: '+00 44 1000 200300', adres_email: 'verkoop@example.com',
+    };
+    const res = await sw.evaluate(({ id, vars }) => runMacro(id, 'uitslagdossier', vars, 'test'), { id, vars });
+    const m = await up.evaluate(() => ({ ...window.model }));
+    const logText = await up.textContent('#log');
+    if (!res.ok) {
+      const log = await sw.evaluate(async () => (await chrome.storage.local.get('log')).log[0]);
+      console.log('       stappenverslag:\n         ' + (log.trace || []).slice(-25).join('\n         '));
+    }
+    assert.ok(res.ok, res.error + ' | ' + logText);
+    assert.deepStrictEqual(
+      [m.a_n1, m.a_n2, m.a_n3, m.a_a1, m.a_pc, m.a_best, m.a_pl1, m.a_pl2, m.a_land, m.a_naam, m.a_tel, m.a_mail, m.a_web],
+      ['TESTWINKEL Supers B.V', 'Goederenontvangst', '', 'Proefstraat 7', '1234AB', 'NL', 'ZONE NL', 'PROEFSTAD', 'NL', 'verkoop@example.com', '+00 44 1000 200300', 'verkoop@example.com', '']
+    );
+    assert.deepStrictEqual([m.opdr, m.ref, m.ontv, m.losadres, m.kond, m.kondplaats], ['VAT-MAAS', 'MEL-PL009999', 'TESTZON00', 'TESTZON00', 'DDP', 'PROEFSTAD']);
+    assert.match(logText, /dossier aangemaakt\]\[adres bewaard\]\[opgeslagen\]/);
+    assert.doesNotMatch(logText, /GEANNULEERD|WAREHOUSE|ZOEKSCHERM/);
+    const codes = await sw.evaluate(async () => (await chrome.storage.local.get('ontvangerCodes')).ontvangerCodes);
+    assert.deepStrictEqual(codes, { 'TESTWINKEL Supers B.V|1234AB': 'TESTZON00' }, 'nieuwe code niet onthouden');
+    await up.close();
+  });
+
   await test('Dossiermutaties — klik op Menu zonder effect geeft een duidelijke melding', async () => {
     const pg = await context.newPage();
     await pg.goto(`${base}/blujay/index.html`); // hier opent "Menu" niets

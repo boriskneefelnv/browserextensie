@@ -66,8 +66,16 @@ Daarna bevestigt hij:
 | klantnummer afnemer (bijv. K1300650) | Ontvanger/Losadres (bijv. ACTIOBIB) |
 | vast voor Top Brands | Laadadres NEELEMAA3, Konditie DDP |
 
-Kent hij de ontvanger-code van een afnemer nog niet, dan blijft dat veld leeg (rood). Vul hem één keer in;
-daarna onthoudt hij hem voor dat klantnummer.
+**Klanten:** Top Brands (opdrachtgever TOPBROUD) en Maxell (opdrachtgever voorlopig VAT-MAAS; leverdatum uit de
+bestandsnaam, bijv. `..._Delivery_18.11.26.pdf`).
+
+**Onbekende ontvanger → nieuw adres:** is er voor de afnemer nog geen ontvanger-code bekend, dan blijft *Ontvanger*
+leeg en vult hij het blok *Nieuw adres* uit de pakbon. Bij uitvoeren maakt hij het adres in BluJay aan: in Ontvanger
+**Ctrl+K** → Naam regel 1/2, Adres regel 1, Postcode, Bestemmingscode (BluJay zet zelf "ZONE NL" in Plaats regel 1),
+Plaats regel 2 = plaats, Land, Naam (contactpersoon), Telefoon, E-mail → Enter → meldingen **OK → Bevestigen → OK** →
+Escape. BluJay zet de nieuwe code in Ontvanger én Losadres; de extensie **onthoudt die code** voor die afnemer, zodat
+hij de volgende keer gewoon de code gebruikt. Weet je de code al, vul hem dan in bij Ontvanger (dan wordt er niets
+aangemaakt).
 
 **Echte toetsaanslagen:** deze handelingen typen zoals jij dat doet (ook Tab en Enter). De browser toont tijdens
 de handeling een balk *"Neele-Vat BluJay Assistent is foutopsporing gestart"*. Dat is normaal en verdwijnt als hij klaar is
