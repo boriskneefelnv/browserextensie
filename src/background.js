@@ -336,14 +336,15 @@ function valuesMatch(actual, expected) {
 }
 
 /** Leest het veld terug na het typen; klopt het niet, dan stoppen (anders raken andere velden verkeerd gevuld). */
-async function verifyTyped(ctrl, where, expected) {
+async function verifyTyped(ctrl, where, expected, typedTag) {
   if (!String(expected ?? '').trim()) return;
   let last = null;
   for (let i = 0; i < 5; i++) {
-    const r = await sendToFrame(where.tabId, where.frameId, { type: 'readField', selector: where.selector });
+    const r = await sendToFrame(where.tabId, where.frameId, { type: 'readField', selector: where.selector, typedTag });
     if (!r || !r.ok) return; // veld is weg (bijv. ander scherm geopend): niet te controleren
     if (r.isCheckbox) throw new Error(`het veld is een vinkje (checkbox), geen tekstveld — tekst "${expected}" niet getypt`);
     if (valuesMatch(r.value, expected)) return;
+    if (typedTag && !r.stillFocused) return; // BluJay heeft de invoer al verwerkt en is verder gegaan
     last = r.value;
     await sleep(150);
   }
@@ -568,12 +569,12 @@ async function runStep(ctrl, step, vars, settings, label) {
           // Na Tab wachten tot de cursor verplaatst is (BluJay controleert soms eerst het veld).
           const before = await focusToken(ctrl);
           await cdpKey(where.tabId, 'Tab');
-          await waitFocusMoved(ctrl, before, 2500);
+          await waitFocusMoved(ctrl, before, /tussen$|^geen$/.test(before) ? 400 : 2500);
         } else if (step.type === 'key') await cdpKey(where.tabId, value || 'Enter');
         else if (value === '') { if (res.value.hadValue) await cdpKey(where.tabId, 'Backspace'); }
         else {
           await cdpText(where.tabId, value);
-          await verifyTyped(ctrl, where, value);
+          await verifyTyped(ctrl, where, value, res.value.typedTag);
         }
         return;
       } catch (e) {

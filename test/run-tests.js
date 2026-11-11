@@ -201,6 +201,13 @@ async function test(name, fn) {
     assert.deepStrictEqual(await dossierValues(), ['1', '99999', '1', '99', '60WH', '60WH', '26/01', '26/12', '', 'ZZZ', '1', '999999999999999', 'J', 'Klaar']);
   });
 
+  await test('Dossiermutaties — "Uw keuze" via onzichtbaar tussenvakje (zoals in BluJay)', async () => {
+    await openDossier('index-blujay.html');
+    const res = await runDossier({ van: '2026-01', tot: '2026-12', klant: '' });
+    assert.ok(res.ok, res.error);
+    assert.deepStrictEqual(await dossierValues(), ['1', '99999', '1', '99', '60WH', '60WH', '26/01', '26/12', '', 'ZZZ', '1', '999999999999999', 'J', 'Klaar']);
+  });
+
   await test('Dossiermutaties — Menu opent een nieuw venster', async () => {
     await openDossier('index-popup.html');
     const res = await runDossier({ van: '2026-01', tot: '2026-12', klant: 'X1' });

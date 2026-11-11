@@ -565,6 +565,8 @@
   }
   const clickHits = new Map();
 
+  const typedEls = new Map();
+
   /** Zet de cursor in het veld (en selecteert de inhoud) zodat de achtergrond echte toetsaanslagen kan sturen. */
   function focusForKeys(el, selectAll) {
     el.scrollIntoView({ block: 'center' });
@@ -573,7 +575,11 @@
       if (typeof el.select === 'function') el.select();
       else if (el.isContentEditable) document.getSelection()?.selectAllChildren(el);
     }
-    return { __real: true, focused: document.activeElement === el, hadValue: 'value' in el ? el.value !== '' : !!el.textContent };
+    // Het veld onthouden, zodat we na het typen precies dít veld kunnen teruglezen.
+    const typedTag = Math.random().toString(36).slice(2);
+    typedEls.set(typedTag, el);
+    setTimeout(() => typedEls.delete(typedTag), 15000);
+    return { __real: true, typedTag, focused: document.activeElement === el, hadValue: 'value' in el ? el.value !== '' : !!el.textContent };
   }
 
   async function exec(step) {
@@ -1077,8 +1083,16 @@
         return false;
       case 'readField': {
         try {
-          const el = find(msg.selector, true);
-          sendResponse({ ok: !!el, value: el ? readValue(el) : null, isCheckbox: el?.type === 'checkbox' });
+          const el = msg.typedTag ? typedEls.get(msg.typedTag) : find(msg.selector, true);
+          if (!el || !el.isConnected) { sendResponse({ ok: false }); return false; }
+          sendResponse({
+            ok: true,
+            value: readValue(el),
+            isCheckbox: el.type === 'checkbox',
+            // Alleen controleren als de cursor nog in dít (zichtbare) veld staat;
+            // is BluJay al verder gegaan, dan valt er niets betrouwbaars te controleren.
+            stillFocused: document.activeElement === el && !isTiny(el),
+          });
         } catch (e) {
           sendResponse({ ok: false, error: e.message });
         }
